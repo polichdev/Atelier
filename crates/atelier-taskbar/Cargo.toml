@@ -1,0 +1,16 @@
+[package]
+name = "atelier-taskbar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Taskbar morphing engine, DWM composition styles, and Explorer crash recovery for Atelier."
+
+[dependencies]
+atelier-common.workspace = true
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Dwm",
+] }
+thiserror.workspace = true
+tracing.workspace = true

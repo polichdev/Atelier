@@ -1,0 +1,12 @@
+[package]
+name = "atelier-common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Common data structures, error types, and shared models for Atelier."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

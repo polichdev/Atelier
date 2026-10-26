@@ -1,0 +1,23 @@
+[package]
+name = "atelier-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Central native background daemon, Win32 event pump, and subsystem orchestrator for Atelier."
+
+[dependencies]
+atelier-common.workspace = true
+atelier-taskbar.workspace = true
+atelier-wallpaper.workspace = true
+atelier-audio.workspace = true
+atelier-widget.workspace = true
+
+mimalloc.workspace = true
+tokio.workspace = true
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "atelier-wallpaper"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Hardware-accelerated live video wallpaper engine, WorkerW injection, and occlusion detection."
+
+[dependencies]
+atelier-common.workspace = true
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+] }
+thiserror.workspace = true
+tracing.workspace = true

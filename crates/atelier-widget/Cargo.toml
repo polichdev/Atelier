@@ -1,0 +1,16 @@
+[package]
+name = "atelier-widget"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Click-through, frameless layered glass desktop widgets subsystem for Atelier."
+
+[dependencies]
+atelier-common.workspace = true
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+] }
+thiserror.workspace = true
+tracing.workspace = true
