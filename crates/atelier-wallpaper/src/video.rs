@@ -14,6 +14,9 @@ pub struct MediaEngineContext {
     initialized: bool,
 }
 
+unsafe impl Send for MediaEngineContext {}
+unsafe impl Sync for MediaEngineContext {}
+
 impl MediaEngineContext {
     pub fn new(device: &ID3D11Device) -> Result<Self> {
         unsafe { MFStartup(MF_VERSION, 0) }.map_err(|e| {

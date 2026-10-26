@@ -28,6 +28,9 @@ pub struct WallpaperEngine {
     _media_context: Option<Arc<MediaEngineContext>>,
 }
 
+unsafe impl Send for WallpaperEngine {}
+unsafe impl Sync for WallpaperEngine {}
+
 impl WallpaperEngine {
     pub fn new(pause_on_battery: bool) -> Result<Self> {
         let workerw = acquire_workerw()?;
