@@ -12,7 +12,7 @@ pub enum TaskbarStyle {
     Mica,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TaskbarConfig {
     pub style: TaskbarStyle,
     pub floating_dock: bool,
@@ -29,7 +29,7 @@ impl Default for TaskbarConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AtelierConfig {
     pub autostart: bool,
     pub taskbar: TaskbarConfig,
