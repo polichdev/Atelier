@@ -60,6 +60,31 @@ pub fn set_taskbar_accent_policy(hwnd: HWND, policy: AccentPolicy) -> Result<()>
 
     let result = unsafe { func(hwnd, &mut data) };
     if result.as_bool() {
+        unsafe {
+            use windows::Win32::Graphics::Gdi::{
+                RedrawWindow, HRGN, RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE,
+                RDW_UPDATENOW,
+            };
+            use windows::Win32::UI::WindowsAndMessaging::{
+                SetWindowPos, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+                SWP_NOZORDER,
+            };
+            let _ = SetWindowPos(
+                hwnd,
+                HWND::default(),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            );
+            let _ = RedrawWindow(
+                hwnd,
+                None,
+                HRGN::default(),
+                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW,
+            );
+        }
         Ok(())
     } else {
         Err(AtelierError::Platform(

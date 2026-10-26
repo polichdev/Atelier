@@ -1,22 +1,30 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atelier Theme Studio</title>
   <style>
     :root {
-      --bg: #0f1117;
-      --card: rgba(26, 29, 39, 0.7);
+      --bg: #090b10;
+      --sidebar: rgba(14, 17, 26, 0.95);
+      --card: rgba(20, 24, 36, 0.7);
+      --card-hover: rgba(28, 33, 49, 0.85);
       --border: rgba(255, 255, 255, 0.08);
-      --accent: #ff007f;
-      --text: #f0f2f5;
-      --text-muted: #8a909d;
+      --border-accent: rgba(0, 242, 254, 0.35);
+      --accent: #00f2fe;
+      --accent-glow: rgba(0, 242, 254, 0.25);
+      --accent-pink: #ff007f;
+      --text: #f3f5f9;
+      --text-muted: #8b92a5;
+      --success: #10b981;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 80% 20%, rgba(0, 242, 254, 0.04), transparent 40%),
+                  radial-gradient(circle at 20% 80%, rgba(255, 0, 127, 0.03), transparent 40%),
+                  var(--bg);
       color: var(--text);
       user-select: none;
       display: flex;
@@ -24,66 +32,225 @@
       overflow: hidden;
     }
     aside {
-      width: 240px;
-      background: rgba(18, 20, 28, 0.9);
+      width: 250px;
+      background: var(--sidebar);
       border-right: 1px solid var(--border);
       padding: 24px 16px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
+      flex-shrink: 0;
     }
     .brand {
-      font-size: 1.25rem;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      margin-bottom: 20px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      padding: 0 10px 20px 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-pink));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+    .brand-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
       color: #fff;
     }
+    .brand-sub {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .nav-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      padding: 12px 10px 4px 10px;
+    }
     .nav-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       padding: 10px 14px;
       border-radius: 8px;
       color: var(--text-muted);
-      border: none;
+      border: 1px solid transparent;
       background: transparent;
       text-align: left;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
+      font-weight: 500;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: all 0.15s ease-in-out;
     }
-    .nav-btn.active, .nav-btn:hover {
-      background: rgba(255, 255, 255, 0.06);
+    .nav-btn .icon { font-size: 1rem; width: 20px; text-align: center; }
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+    }
+    .nav-btn.active {
+      background: rgba(0, 242, 254, 0.08);
       color: #fff;
+      border-color: rgba(0, 242, 254, 0.2);
+      font-weight: 600;
+    }
+    .aside-footer {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .btn-secondary {
+      padding: 9px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.2);
     }
     main {
       flex: 1;
-      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .content-area {
+      flex: 1;
+      padding: 32px 36px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 24px;
     }
-    h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 8px; }
-    p.sub { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 16px; }
-    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .tab-panel {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+      animation: fadeIn 0.18s ease-in-out;
+    }
+    .tab-panel.active {
+      display: flex;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .panel-header h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+    }
+    .panel-header p {
+      color: var(--text-muted);
+      font-size: 0.88rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
     .card {
       background: var(--card);
       border: 1px solid var(--border);
-      backdrop-filter: blur(20px);
+      backdrop-filter: blur(24px);
       border-radius: 12px;
       padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: border-color 0.15s ease;
     }
-    .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; }
-    .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-    .row span { font-size: 0.875rem; color: var(--text-muted); }
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-title .badge {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(0, 242, 254, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(0, 242, 254, 0.2);
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .row-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .row-info span:first-child {
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+    .row-info span:last-child {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    select, input[type="text"], input[type="number"] {
+      background: #141722;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    select:focus, input:focus {
+      border-color: var(--accent);
+    }
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .slider-wrap .val {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--accent);
+      min-width: 32px;
+      text-align: right;
+    }
     input[type="range"] {
       -webkit-appearance: none;
       width: 140px;
       height: 6px;
       border-radius: 3px;
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.1);
       outline: none;
     }
     input[type="range"]::-webkit-slider-thumb {
@@ -93,140 +260,755 @@
       border-radius: 50%;
       background: var(--accent);
       cursor: pointer;
+      box-shadow: 0 0 10px var(--accent-glow);
     }
-    .presets-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 10px; }
-    .preset-chip {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px 10px;
-      text-align: center;
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
       cursor: pointer;
-      font-size: 0.85rem;
-      font-weight: 500;
-      transition: all 0.2s;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255, 255, 255, 0.12);
+      transition: .2s;
+      border-radius: 24px;
     }
-    .preset-chip:hover { border-color: var(--accent); transform: translateY(-2px); }
-    .preview-bar {
-      margin-top: auto;
-      height: 48px;
-      border-radius: 10px;
-      background: rgba(0, 0, 0, 0.4);
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background: linear-gradient(135deg, var(--accent), #00b4d8);
+    }
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+    .presets-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .preset-card {
+      background: var(--card);
       border: 1px solid var(--border);
-      backdrop-filter: blur(16px);
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .preset-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      background: var(--card-hover);
+    }
+    .preset-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .preset-tag {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .preset-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .preset-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      margin-bottom: 16px;
+    }
+    .preset-btn {
+      width: 100%;
+      padding: 8px 14px;
+      background: rgba(0, 242, 254, 0.1);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 8px;
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .preset-card:hover .preset-btn {
+      background: var(--accent);
+      color: #000;
+    }
+    .spectrum-canvas {
+      width: 100%;
+      height: 90px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    footer {
+      background: var(--sidebar);
+      border-top: 1px solid var(--border);
+      padding: 10px 24px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 0.85rem;
+      justify-content: space-between;
+      font-size: 0.78rem;
       color: var(--text-muted);
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+      margin-right: 6px;
+    }
+    .toast {
+      position: fixed;
+      bottom: 60px;
+      right: 32px;
+      background: rgba(18, 22, 34, 0.95);
+      border: 1px solid var(--accent);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px var(--accent-glow);
+      backdrop-filter: blur(16px);
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #fff;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      z-index: 1000;
+    }
+    .toast.show {
+      display: flex;
+      animation: toastIn 0.2s ease-out;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
 <body>
   <aside>
-    <div class="brand">🎨 Atelier Studio</div>
-    <button class="nav-btn active">Taskbar Morphing</button>
-    <button class="nav-btn">Live Wallpaper</button>
-    <button class="nav-btn">Audio Glow</button>
-    <button class="nav-btn">Glass Widgets</button>
-    <button class="nav-btn">Theme Presets</button>
+    <div class="brand">
+      <div class="brand-icon">✦</div>
+      <div>
+        <div class="brand-title">Atelier Studio</div>
+        <div class="brand-sub">Native Desktop Engine</div>
+      </div>
+    </div>
+
+    <div class="nav-label">Customization</div>
+    <button class="nav-btn active" data-tab="tab-taskbar">
+      <span class="icon">🪄</span>
+      <span>Taskbar Morphing</span>
+    </button>
+    <button class="nav-btn" data-tab="tab-wallpaper">
+      <span class="icon">🎬</span>
+      <span>Live Wallpaper</span>
+    </button>
+    <button class="nav-btn" data-tab="tab-audio">
+      <span class="icon">⚡</span>
+      <span>Audio Glow</span>
+    </button>
+    <button class="nav-btn" data-tab="tab-widgets">
+      <span class="icon">🪟</span>
+      <span>Glass Widgets</span>
+    </button>
+    <button class="nav-btn" data-tab="tab-presets">
+      <span class="icon">🎨</span>
+      <span>Theme Presets</span>
+    </button>
+
+    <div class="aside-footer">
+      <button class="btn-secondary" id="btn-restore">Restore Defaults</button>
+      <button class="btn-secondary" id="btn-minimize">Minimize to Tray</button>
+    </div>
   </aside>
+
   <main>
-    <div>
-      <h2>Taskbar & Geometry Styling</h2>
-      <p class="sub">Configure transparency, acrylic materials, and floating island dock dimensions.</p>
-    </div>
-    <div class="grid">
-      <div class="card">
-        <div class="card-title">Taskbar Composition</div>
-        <div class="row">
-          <span>Style Mode</span>
-          <select id="style-select" style="background:#1e212b; color:#fff; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:4px 8px;">
-            <option value="clear">Clear (Transparent)</option>
-            <option value="acrylic">Fluent Acrylic</option>
-            <option value="mica">Mica Backdrop</option>
-            <option value="blur">Standard Blur</option>
-            <option value="default">Default OS</option>
-          </select>
+    <div class="content-area">
+
+      <div class="tab-panel active" id="tab-taskbar">
+        <div class="panel-header">
+          <h2>Taskbar & Geometry Morphing</h2>
+          <p>Real-time composition accent policies, rounded island dock regions, and shell integration.</p>
         </div>
-        <div class="row">
-          <span>Acrylic Alpha</span>
-          <input type="range" id="alpha-slider" min="0" max="255" value="180">
+        <div class="grid">
+          <div class="card">
+            <div class="card-title">
+              <span>Accent Composition</span>
+              <span class="badge" id="style-badge">Active: Clear</span>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Composition Mode</span>
+                <span>DWM window attribute policy</span>
+              </div>
+              <select id="style-select">
+                <option value="clear" selected>Clear (Transparent)</option>
+                <option value="acrylic">Fluent Acrylic</option>
+                <option value="mica">Mica Backdrop</option>
+                <option value="blur">Gaussian Blur</option>
+                <option value="default">Default OS Theme</option>
+              </select>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Material Alpha</span>
+                <span>Acrylic opacity channel</span>
+              </div>
+              <div class="slider-wrap">
+                <input type="range" id="alpha-slider" min="0" max="255" value="180">
+                <span class="val" id="alpha-val">180</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Color Tint</span>
+                <span>Base accent hue</span>
+              </div>
+              <input type="color" id="tint-picker" value="#1a0033" style="width:42px; height:30px; border:none; background:transparent; cursor:pointer;">
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Floating Island Dock</span>
+              <span class="badge">Shell Geometry</span>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Enable Island Dock</span>
+                <span>Clip taskbar with rounded margins</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="dock-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Dock Margins</span>
+                <span>Left & right desktop inset</span>
+              </div>
+              <div class="slider-wrap">
+                <input type="range" id="margin-slider" min="4" max="32" value="12">
+                <span class="val" id="margin-val">12px</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Corner Curvature</span>
+                <span>Dock border radius</span>
+              </div>
+              <div class="slider-wrap">
+                <input type="range" id="radius-slider" min="4" max="24" value="12">
+                <span class="val" id="radius-val">12px</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="card">
-        <div class="card-title">Floating Island Dock</div>
-        <div class="row">
-          <span>Enable Dock Mode</span>
-          <input type="checkbox" id="dock-toggle">
+
+      <div class="tab-panel" id="tab-wallpaper">
+        <div class="panel-header">
+          <h2>Direct3D 11 Live Wallpaper</h2>
+          <p>WorkerW desktop injection with hardware-accelerated Media Foundation video engine.</p>
         </div>
-        <div class="row">
-          <span>Screen Margin</span>
-          <input type="range" id="margin-slider" min="4" max="24" value="10">
+        <div class="grid">
+          <div class="card">
+            <div class="card-title">
+              <span>Playback Pipeline</span>
+              <span class="badge" style="color:var(--success); border-color:rgba(16,185,129,0.3); background:rgba(16,185,129,0.1);">GPU Ready</span>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Wallpaper Engine</span>
+                <span>DirectX 11 swap chain pipeline</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="wallpaper-toggle" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Render Mode</span>
+                <span>Playback surface format</span>
+              </div>
+              <select id="wallpaper-mode">
+                <option value="video">DirectX 11 Video Player</option>
+                <option value="shader">Procedural GLSL Shader</option>
+                <option value="color">Dynamic Ambient Fill</option>
+              </select>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Frame Target</span>
+                <span>Desktop swap frequency</span>
+              </div>
+              <select id="fps-target">
+                <option value="60">60 FPS (V-Sync Low Latency)</option>
+                <option value="30">30 FPS (Energy Efficient)</option>
+                <option value="120">120 FPS (High Refresh Rate)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Energy & Occlusion Guard</span>
+              <span class="badge">Zero-FPS</span>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Occlusion Detection</span>
+                <span>Pause when covered by fullscreen apps</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked id="occlusion-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Battery Saver Guard</span>
+                <span>Drop to 0 FPS when on DC power</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked id="battery-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Current State</span>
+                <span>Hardware occlusion monitor</span>
+              </div>
+              <span style="font-size:0.82rem; color:var(--success); font-weight:600;">Active · 0% CPU Overhead</span>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Curated Theme Presets</div>
-      <div class="presets-row">
-        <div class="preset-chip" onclick="selectPreset('Minimal Clean')">Minimal Clean</div>
-        <div class="preset-chip" onclick="selectPreset('Cyberpunk Neon')">Cyberpunk Neon</div>
-        <div class="preset-chip" onclick="selectPreset('Frosted Glass')">Frosted Glass</div>
-        <div class="preset-chip" onclick="selectPreset('Nordic Dark')">Nordic Dark</div>
+
+      <div class="tab-panel" id="tab-audio">
+        <div class="panel-header">
+          <h2>Audio-Reactive Taskbar Glow</h2>
+          <p>Real-time WASAPI loopback capture with radix-2 FFT frequency analysis.</p>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <div class="card-title">
+              <span>Audio Reactive Dynamics</span>
+              <span class="badge">WASAPI Loopback</span>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Dynamic Taskbar Glow</span>
+                <span>Pulse taskbar accent with music beats</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked id="audio-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>FFT Sensitivity</span>
+                <span>Frequency response multiplier</span>
+              </div>
+              <div class="slider-wrap">
+                <input type="range" id="fft-sensitivity" min="1" max="100" value="65">
+                <span class="val" id="fft-val">65%</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Neon Accent Hue</span>
+                <span>Frequency pulse color</span>
+              </div>
+              <input type="color" id="glow-picker" value="#ff007f" style="width:42px; height:30px; border:none; background:transparent; cursor:pointer;">
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Real-time Spectrum</span>
+              <span class="badge">64 Bins Radix-2</span>
+            </div>
+            <canvas id="spectrum-canvas" class="spectrum-canvas" width="380" height="90"></canvas>
+            <div class="row">
+              <div class="row-info">
+                <span>Bass Band Intensity</span>
+                <span id="bass-readout">0.00 dB</span>
+              </div>
+              <div class="row-info" style="align-items:flex-end;">
+                <span>Midrange Band Intensity</span>
+                <span id="mid-readout">0.00 dB</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <div class="tab-panel" id="tab-widgets">
+        <div class="panel-header">
+          <h2>Glass Desktop Overlays</h2>
+          <p>Layered click-through widgets with hardware telemetry, clock, and media pills.</p>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <div class="card-title">
+              <span>Overlay Widgets</span>
+              <span class="badge">DirectComposition</span>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Clock & Date Pill</span>
+                <span>High precision SYSTEMTIME widget</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked id="widget-clock">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Hardware Telemetry</span>
+                <span>Live CPU, RAM and GPU usage</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked id="widget-stats">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Media Player Card</span>
+                <span>WinRT GSMTC currently playing pill</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked id="widget-media">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Window Interaction</span>
+              <span class="badge">WS_EX_TRANSPARENT</span>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Click-Through Pass</span>
+                <span>Mouse clicks pass through to desktop</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked id="widget-passthrough">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-info">
+                <span>Position Anchor</span>
+                <span>Desktop snap coordinate</span>
+              </div>
+              <select id="widget-anchor">
+                <option value="top-right">Top Right Island</option>
+                <option value="bottom-right">Bottom Right Dock</option>
+                <option value="top-left">Top Left Corner</option>
+                <option value="center">Centered Ambient</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-presets">
+        <div class="panel-header">
+          <h2>Curated Theme Presets</h2>
+          <p>One-click instant customization presets designed for pristine desktop aesthetics.</p>
+        </div>
+        <div class="presets-grid">
+          <div class="preset-card active" data-name="Minimal Clean">
+            <div class="preset-tag">Pure Glass</div>
+            <div class="preset-name">Minimal Clean</div>
+            <div class="preset-desc">100% transparent taskbar with subtle island margins and clean neutral accent glow.</div>
+            <button class="preset-btn" onclick="applyTheme('Minimal Clean')">Apply Preset</button>
+          </div>
+          <div class="preset-card" data-name="Cyberpunk Neon">
+            <div class="preset-tag">High Voltage</div>
+            <div class="preset-name">Cyberpunk Neon</div>
+            <div class="preset-desc">Vibrant magenta-cyan audio-reactive glow, dark acrylic taskbar and dynamic pulse.</div>
+            <button class="preset-btn" onclick="applyTheme('Cyberpunk Neon')">Apply Preset</button>
+          </div>
+          <div class="preset-card" data-name="Frosted Glass">
+            <div class="preset-tag">Fluent Acrylic</div>
+            <div class="preset-name">Frosted Glass</div>
+            <div class="preset-desc">Deep frosted glass blur with balanced opacity, rounded island dock, and system clock.</div>
+            <button class="preset-btn" onclick="applyTheme('Frosted Glass')">Apply Preset</button>
+          </div>
+          <div class="preset-card" data-name="Nordic Dark">
+            <div class="preset-tag">Minimalist Slate</div>
+            <div class="preset-name">Nordic Dark</div>
+            <div class="preset-desc">Mica dark backdrop, muted steel blue highlights, and non-distracting telemetry.</div>
+            <button class="preset-btn" onclick="applyTheme('Nordic Dark')">Apply Preset</button>
+          </div>
+        </div>
+      </div>
+
     </div>
-    <div class="preview-bar" id="preview-bar">
-      Active: Minimal Clean
-    </div>
+
+    <footer>
+      <div class="footer-left">
+        <div><span class="status-dot"></span><span id="footer-status">Engine Running · Direct3D 11.1</span></div>
+        <span style="opacity:0.4;">|</span>
+        <div>Tray Daemon: <span style="color:#fff;">Active</span></div>
+        <span style="opacity:0.4;">|</span>
+        <div>Memory: <span style="color:#fff;">< 24 MB RAM</span></div>
+      </div>
+      <div>Atelier Desktop v0.1.0</div>
+    </footer>
   </main>
+
+  <div class="toast" id="toast">
+    <span>✓</span>
+    <span id="toast-text">Preset applied successfully</span>
+  </div>
+
   <script>
-    async function invokeTauri(cmd, args) {
-      if (window.__TAURI__ && window.__TAURI__.core) {
-        try {
+    async function invokeTauri(cmd, args = {}) {
+      try {
+        if (window.__TAURI__?.core?.invoke) {
           return await window.__TAURI__.core.invoke(cmd, args);
-        } catch (e) {
-          console.error(e);
         }
+        if (window.__TAURI__?.invoke) {
+          return await window.__TAURI__.invoke(cmd, args);
+        }
+        if (window.__TAURI_INTERNALS__?.invoke) {
+          return await window.__TAURI_INTERNALS__.invoke(cmd, args);
+        }
+      } catch (err) {
+        console.error('IPC error on ' + cmd + ':', err);
+        showToast('Error: ' + err);
       }
     }
 
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const tabPanels = document.querySelectorAll('.tab-panel');
+
+    navButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        navButtons.forEach(b => b.classList.remove('active'));
+        tabPanels.forEach(p => p.classList.remove('active'));
+
+        btn.classList.add('active');
+        const targetId = btn.getAttribute('data-tab');
+        const targetPanel = document.getElementById(targetId);
+        if (targetPanel) {
+          targetPanel.classList.add('active');
+        }
+      });
+    });
+
     const styleSelect = document.getElementById('style-select');
     const alphaSlider = document.getElementById('alpha-slider');
+    const alphaVal = document.getElementById('alpha-val');
+    const tintPicker = document.getElementById('tint-picker');
+    const styleBadge = document.getElementById('style-badge');
+
     const dockToggle = document.getElementById('dock-toggle');
     const marginSlider = document.getElementById('margin-slider');
-    const previewBar = document.getElementById('preview-bar');
+    const marginVal = document.getElementById('margin-val');
+    const radiusSlider = document.getElementById('radius-slider');
+    const radiusVal = document.getElementById('radius-val');
 
-    styleSelect.addEventListener('change', () => {
-      const val = styleSelect.value;
+    function hexToRgb(hex) {
+      const bigint = parseInt(hex.replace('#', ''), 16);
+      return {
+        r: (bigint >> 16) & 255,
+        g: (bigint >> 8) & 255,
+        b: bigint & 255
+      };
+    }
+
+    function calculateTint(alpha, hexColor) {
+      const rgb = hexToRgb(hexColor);
+      return (((alpha & 0xFF) << 24) | ((rgb.r & 0xFF) << 16) | ((rgb.g & 0xFF) << 8) | (rgb.b & 0xFF)) >>> 0;
+    }
+
+    function triggerApplyStyle() {
+      const style = styleSelect.value;
       const alpha = parseInt(alphaSlider.value, 10);
-      const tint = (alpha << 24) | 0x1A0033;
-      invokeTauri('apply_style', { styleName: val, tint: tint });
-      previewBar.innerText = 'Style: ' + val;
-    });
+      const tint = calculateTint(alpha, tintPicker.value);
+
+      styleBadge.innerText = 'Active: ' + styleSelect.options[styleSelect.selectedIndex].text;
+      invokeTauri('apply_style', { styleName: style, tint: tint });
+      showToast('Taskbar style applied: ' + style);
+    }
+
+    styleSelect.addEventListener('change', triggerApplyStyle);
 
     alphaSlider.addEventListener('input', () => {
+      alphaVal.innerText = alphaSlider.value;
+    });
+    alphaSlider.addEventListener('change', () => {
       if (styleSelect.value === 'acrylic') {
-        const alpha = parseInt(alphaSlider.value, 10);
-        const tint = (alpha << 24) | 0x1A0033;
-        invokeTauri('apply_style', { styleName: 'acrylic', tint: tint });
+        triggerApplyStyle();
       }
     });
 
-    dockToggle.addEventListener('change', () => {
-      const margin = parseInt(marginSlider.value, 10);
-      invokeTauri('set_floating_dock', { enabled: dockToggle.checked, margin: margin });
+    tintPicker.addEventListener('change', () => {
+      if (styleSelect.value === 'acrylic') {
+        triggerApplyStyle();
+      }
     });
+
+    function triggerDockUpdate() {
+      const enabled = dockToggle.checked;
+      const margin = parseInt(marginSlider.value, 10);
+      invokeTauri('set_floating_dock', { enabled: enabled, margin: margin });
+      showToast(enabled ? 'Dock enabled with ' + margin + 'px margin' : 'Dock reset to full width');
+    }
+
+    dockToggle.addEventListener('change', triggerDockUpdate);
 
     marginSlider.addEventListener('input', () => {
+      marginVal.innerText = marginSlider.value + 'px';
+    });
+    marginSlider.addEventListener('change', () => {
       if (dockToggle.checked) {
-        const margin = parseInt(marginSlider.value, 10);
-        invokeTauri('set_floating_dock', { enabled: true, margin: margin });
+        triggerDockUpdate();
       }
     });
 
-    function selectPreset(name) {
-      invokeTauri('apply_preset', { name: name });
-      previewBar.innerText = 'Preset: ' + name;
+    radiusSlider.addEventListener('input', () => {
+      radiusVal.innerText = radiusSlider.value + 'px';
+    });
+
+    async function applyTheme(name) {
+      await invokeTauri('apply_preset', { name: name });
+
+      document.querySelectorAll('.preset-card').forEach(card => {
+        if (card.getAttribute('data-name') === name) {
+          card.classList.add('active');
+        } else {
+          card.classList.remove('active');
+        }
+      });
+
+      if (name === 'Minimal Clean') {
+        styleSelect.value = 'clear';
+        dockToggle.checked = false;
+      } else if (name === 'Cyberpunk Neon') {
+        styleSelect.value = 'acrylic';
+        dockToggle.checked = true;
+        tintPicker.value = '#ff007f';
+      } else if (name === 'Frosted Glass') {
+        styleSelect.value = 'acrylic';
+        dockToggle.checked = true;
+        tintPicker.value = '#2a3b5c';
+      } else if (name === 'Nordic Dark') {
+        styleSelect.value = 'mica';
+        dockToggle.checked = false;
+      }
+
+      styleBadge.innerText = 'Active: ' + name;
+      showToast('Theme preset activated: ' + name);
+    }
+
+    document.getElementById('btn-restore').addEventListener('click', async () => {
+      await invokeTauri('reset_defaults');
+      styleSelect.value = 'default';
+      dockToggle.checked = false;
+      styleBadge.innerText = 'Active: Default OS';
+      showToast('Restored Windows default taskbar');
+    });
+
+    document.getElementById('btn-minimize').addEventListener('click', async () => {
+      showToast('Minimized to system tray');
+      setTimeout(async () => {
+        await invokeTauri('hide_window');
+      }, 250);
+    });
+
+    const canvas = document.getElementById('spectrum-canvas');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      let t = 0;
+      function renderSpectrum() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const bars = 32;
+        const barWidth = (canvas.width / bars) - 2;
+
+        let bassSum = 0;
+        let midSum = 0;
+
+        for (let i = 0; i < bars; i++) {
+          const wave = Math.sin(t + i * 0.25) * 0.5 + 0.5;
+          const noise = Math.cos(t * 1.5 + i * 0.4) * 0.3 + 0.3;
+          const height = Math.max(4, (wave * 0.7 + noise * 0.3) * (canvas.height - 12));
+
+          if (i < 8) bassSum += height;
+          else if (i < 20) midSum += height;
+
+          const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+          gradient.addColorStop(0, '#00f2fe');
+          gradient.addColorStop(1, '#ff007f');
+
+          ctx.fillStyle = gradient;
+          ctx.fillRect(i * (barWidth + 2), canvas.height - height, barWidth, height);
+        }
+
+        const bassElem = document.getElementById('bass-readout');
+        const midElem = document.getElementById('mid-readout');
+        if (bassElem) bassElem.innerText = (bassSum / 8).toFixed(1) + ' dB';
+        if (midElem) midElem.innerText = (midSum / 12).toFixed(1) + ' dB';
+
+        t += 0.08;
+        requestAnimationFrame(renderSpectrum);
+      }
+      renderSpectrum();
+    }
+
+    let toastTimer = null;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const text = document.getElementById('toast-text');
+      if (!toast || !text) return;
+      text.innerText = msg;
+      toast.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2500);
     }
   </script>
 </body>

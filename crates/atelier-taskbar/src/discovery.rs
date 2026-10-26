@@ -5,7 +5,14 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 pub fn find_primary_taskbar() -> Option<HWND> {
-    unsafe { FindWindowW(w!("Shell_TrayWnd"), None).ok() }
+    unsafe {
+        let hwnd = FindWindowW(w!("Shell_TrayWnd"), None).ok()?;
+        if hwnd.0.is_null() {
+            None
+        } else {
+            Some(hwnd)
+        }
+    }
 }
 
 pub fn find_secondary_taskbars() -> Vec<HWND> {

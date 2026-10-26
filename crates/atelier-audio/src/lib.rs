@@ -29,6 +29,10 @@ impl AudioManager {
         Ok(())
     }
 
+    pub fn is_active(&self) -> bool {
+        self.capture.is_some()
+    }
+
     pub fn spectrum(&self) -> SpectrumData {
         if let Some(c) = &self.capture {
             c.latest_spectrum()

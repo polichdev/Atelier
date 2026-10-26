@@ -34,7 +34,7 @@ pub fn apply_taskbar_style(hwnd: HWND, style: TaskbarStyle) -> Result<()> {
         TaskbarStyle::Blur => {
             let policy = AccentPolicy {
                 accent_state: ACCENT_ENABLE_BLURBEHIND,
-                accent_flags: 0,
+                accent_flags: 2,
                 gradient_color: 0,
                 animation_id: 0,
             };
@@ -43,7 +43,7 @@ pub fn apply_taskbar_style(hwnd: HWND, style: TaskbarStyle) -> Result<()> {
         TaskbarStyle::Acrylic { tint } => {
             let policy = AccentPolicy {
                 accent_state: ACCENT_ENABLE_ACRYLICBLURBEHIND,
-                accent_flags: 0,
+                accent_flags: 2,
                 gradient_color: tint,
                 animation_id: 0,
             };
