@@ -7,6 +7,7 @@ members = [
     "crates/atelier-wallpaper",
     "crates/atelier-audio",
     "crates/atelier-widget",
+    "crates/atelier-ui",
 ]
 
 [workspace.package]

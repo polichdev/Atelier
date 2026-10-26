@@ -1,0 +1,22 @@
+{
+  "productName": "Atelier",
+  "version": "0.1.0",
+  "identifier": "com.atelier.desktop",
+  "build": {
+    "frontendDist": "./ui/dist",
+    "devUrl": "http://localhost:5173"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Atelier Theme Studio",
+        "width": 880,
+        "height": 620,
+        "resizable": false,
+        "decorations": true,
+        "transparent": true,
+        "visible": true
+      }
+    ]
+  }
+}
