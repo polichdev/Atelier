@@ -1,3 +1,4 @@
+use crate::discovery::ensure_interactive_desktop;
 use atelier_common::error::{AtelierError, Result};
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::Graphics::Gdi::{
@@ -7,6 +8,7 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
 
 pub fn apply_floating_dock(hwnd: HWND, margin: i32, corner_radius: i32) -> Result<()> {
+    ensure_interactive_desktop();
     let mut rect = RECT::default();
     unsafe { GetWindowRect(hwnd, &mut rect) }.map_err(|e| {
         AtelierError::Platform(format!("Failed to retrieve taskbar window rect: {e}"))
@@ -61,6 +63,7 @@ pub fn apply_floating_dock(hwnd: HWND, margin: i32, corner_radius: i32) -> Resul
 }
 
 pub fn reset_floating_dock(hwnd: HWND) -> Result<()> {
+    ensure_interactive_desktop();
     let _ = unsafe { SetWindowRgn(hwnd, HRGN::default(), true) };
     unsafe {
         let _ = RedrawWindow(

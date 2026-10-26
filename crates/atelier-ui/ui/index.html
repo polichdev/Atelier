@@ -878,8 +878,12 @@
 
     alphaSlider.addEventListener('input', () => {
       alphaVal.innerText = alphaSlider.value;
+      if (styleSelect.value === 'acrylic') {
+        triggerApplyStyle();
+      }
     });
-    alphaSlider.addEventListener('change', () => {
+
+    tintPicker.addEventListener('input', () => {
       if (styleSelect.value === 'acrylic') {
         triggerApplyStyle();
       }
@@ -902,8 +906,6 @@
 
     marginSlider.addEventListener('input', () => {
       marginVal.innerText = marginSlider.value + 'px';
-    });
-    marginSlider.addEventListener('change', () => {
       if (dockToggle.checked) {
         triggerDockUpdate();
       }
@@ -997,6 +999,8 @@
       }
       renderSpectrum();
     }
+
+    setTimeout(triggerApplyStyle, 100);
 
     let toastTimer = null;
     function showToast(msg) {

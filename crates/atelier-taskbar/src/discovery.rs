@@ -1,10 +1,23 @@
 use windows::core::w;
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+use windows::Win32::System::StationsAndDesktops::{
+    OpenInputDesktop, SetThreadDesktop, DESKTOP_ACCESS_FLAGS, DF_ALLOWOTHERACCOUNTHOOK,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, FindWindowExW, FindWindowW, GetClassNameW,
 };
 
+pub fn ensure_interactive_desktop() {
+    unsafe {
+        let access = DESKTOP_ACCESS_FLAGS(0x01FF);
+        if let Ok(desk) = OpenInputDesktop(DF_ALLOWOTHERACCOUNTHOOK, false, access) {
+            let _ = SetThreadDesktop(desk);
+        }
+    }
+}
+
 pub fn find_primary_taskbar() -> Option<HWND> {
+    ensure_interactive_desktop();
     unsafe {
         let hwnd = FindWindowW(w!("Shell_TrayWnd"), None).ok()?;
         if hwnd.0.is_null() {
@@ -16,6 +29,7 @@ pub fn find_primary_taskbar() -> Option<HWND> {
 }
 
 pub fn find_secondary_taskbars() -> Vec<HWND> {
+    ensure_interactive_desktop();
     let mut taskbars = Vec::new();
     let mut current = HWND::default();
 
@@ -37,6 +51,7 @@ pub fn find_secondary_taskbars() -> Vec<HWND> {
 }
 
 pub fn find_all_taskbars() -> Vec<HWND> {
+    ensure_interactive_desktop();
     let mut all = Vec::new();
 
     if let Some(primary) = find_primary_taskbar() {
@@ -54,6 +69,7 @@ pub fn find_all_taskbars() -> Vec<HWND> {
 }
 
 fn find_taskbars_by_enumeration() -> Vec<HWND> {
+    ensure_interactive_desktop();
     let mut taskbars = Vec::new();
 
     unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
