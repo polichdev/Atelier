@@ -169,15 +169,65 @@
     <div class="card">
       <div class="card-title">Curated Theme Presets</div>
       <div class="presets-row">
-        <div class="preset-chip">Minimal Clean</div>
-        <div class="preset-chip">Cyberpunk Neon</div>
-        <div class="preset-chip">Frosted Glass</div>
-        <div class="preset-chip">Nordic Dark</div>
+        <div class="preset-chip" onclick="selectPreset('Minimal Clean')">Minimal Clean</div>
+        <div class="preset-chip" onclick="selectPreset('Cyberpunk Neon')">Cyberpunk Neon</div>
+        <div class="preset-chip" onclick="selectPreset('Frosted Glass')">Frosted Glass</div>
+        <div class="preset-chip" onclick="selectPreset('Nordic Dark')">Nordic Dark</div>
       </div>
     </div>
     <div class="preview-bar" id="preview-bar">
-      Desktop Taskbar Live Preview Simulation
+      Active: Minimal Clean
     </div>
   </main>
+  <script>
+    async function invokeTauri(cmd, args) {
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        try {
+          return await window.__TAURI__.core.invoke(cmd, args);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+
+    const styleSelect = document.getElementById('style-select');
+    const alphaSlider = document.getElementById('alpha-slider');
+    const dockToggle = document.getElementById('dock-toggle');
+    const marginSlider = document.getElementById('margin-slider');
+    const previewBar = document.getElementById('preview-bar');
+
+    styleSelect.addEventListener('change', () => {
+      const val = styleSelect.value;
+      const alpha = parseInt(alphaSlider.value, 10);
+      const tint = (alpha << 24) | 0x1A0033;
+      invokeTauri('apply_style', { styleName: val, tint: tint });
+      previewBar.innerText = 'Style: ' + val;
+    });
+
+    alphaSlider.addEventListener('input', () => {
+      if (styleSelect.value === 'acrylic') {
+        const alpha = parseInt(alphaSlider.value, 10);
+        const tint = (alpha << 24) | 0x1A0033;
+        invokeTauri('apply_style', { styleName: 'acrylic', tint: tint });
+      }
+    });
+
+    dockToggle.addEventListener('change', () => {
+      const margin = parseInt(marginSlider.value, 10);
+      invokeTauri('set_floating_dock', { enabled: dockToggle.checked, margin: margin });
+    });
+
+    marginSlider.addEventListener('input', () => {
+      if (dockToggle.checked) {
+        const margin = parseInt(marginSlider.value, 10);
+        invokeTauri('set_floating_dock', { enabled: true, margin: margin });
+      }
+    });
+
+    function selectPreset(name) {
+      invokeTauri('apply_preset', { name: name });
+      previewBar.innerText = 'Preset: ' + name;
+    }
+  </script>
 </body>
 </html>

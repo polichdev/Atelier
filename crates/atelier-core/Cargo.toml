@@ -5,6 +5,14 @@ edition.workspace = true
 license.workspace = true
 description = "Central native background daemon, Win32 event pump, and subsystem orchestrator for Atelier."
 
+[lib]
+name = "atelier_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "atelier-core"
+path = "src/main.rs"
+
 [dependencies]
 atelier-common.workspace = true
 atelier-taskbar.workspace = true
