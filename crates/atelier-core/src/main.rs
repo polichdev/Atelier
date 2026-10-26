@@ -59,6 +59,7 @@ fn main() -> anyhow::Result<()> {
     let tray = SystemTrayManager::new(move |action| match action {
         TrayAction::OpenStudio => {
             tracing::info!("Tray action: Open Theme Studio");
+            open_theme_studio();
         }
         TrayAction::ToggleWallpaper => {
             if let Some(wp) = &wallpaper_clone {
@@ -108,6 +109,7 @@ fn main() -> anyhow::Result<()> {
     })?;
 
     tracing::info!("Atelier background daemon is active in system tray.");
+    open_theme_studio();
 
     let tray_thread = std::thread::spawn(move || {
         tray.run_loop();
@@ -128,4 +130,28 @@ fn main() -> anyhow::Result<()> {
     tracing::info!("Atelier daemon successfully terminated.");
 
     Ok(())
+}
+
+fn open_theme_studio() {
+    let ui_path = std::env::current_dir()
+        .map(|p| {
+            p.join("crates")
+                .join("atelier-ui")
+                .join("ui")
+                .join("index.html")
+        })
+        .unwrap_or_else(|_| std::path::PathBuf::from("crates/atelier-ui/ui/index.html"));
+
+    let url = format!("file:///{}", ui_path.display()).replace('\\', "/");
+    let app_arg = format!("--app={url}");
+
+    let launched = std::process::Command::new("msedge.exe")
+        .args([&app_arg, "--window-size=920,660"])
+        .spawn();
+
+    if launched.is_err() {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", &url])
+            .spawn();
+    }
 }

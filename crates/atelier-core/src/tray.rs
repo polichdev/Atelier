@@ -171,7 +171,9 @@ unsafe extern "system" fn tray_wnd_proc(
             let event = lparam.0 as u32;
             if event == WM_RBUTTONUP {
                 show_tray_menu(hwnd);
-            } else if event == WM_LBUTTONDBLCLK {
+            } else if event == WM_LBUTTONDBLCLK
+                || event == windows::Win32::UI::WindowsAndMessaging::WM_LBUTTONUP
+            {
                 trigger_action(hwnd, TrayAction::OpenStudio);
             }
             LRESULT(0)
