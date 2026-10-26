@@ -11,6 +11,8 @@ windows = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
 ] }
 thiserror.workspace = true
 tracing.workspace = true
