@@ -1,9 +1,13 @@
+pub mod occlusion;
 pub mod renderer;
+pub mod video;
 pub mod workerw;
 
 use atelier_common::error::Result;
+use occlusion::{OcclusionDetector, OcclusionState};
 use renderer::D3D11Renderer;
 use std::sync::{Arc, Mutex};
+use video::{MediaEngineContext, VideoWallpaperPlayer};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
@@ -19,10 +23,13 @@ pub struct WallpaperEngine {
     workerw: SendHwnd,
     host_window: SendHwnd,
     renderer: Arc<Mutex<D3D11Renderer>>,
+    occlusion: Arc<Mutex<OcclusionDetector>>,
+    video_player: Arc<Mutex<VideoWallpaperPlayer>>,
+    _media_context: Option<Arc<MediaEngineContext>>,
 }
 
 impl WallpaperEngine {
-    pub fn new() -> Result<Self> {
+    pub fn new(pause_on_battery: bool) -> Result<Self> {
         let workerw = acquire_workerw()?;
         let host_window = create_wallpaper_host_window(workerw)?;
 
@@ -30,11 +37,17 @@ impl WallpaperEngine {
         let height = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) } as u32;
 
         let renderer = D3D11Renderer::new(host_window, width, height)?;
+        let media_context = MediaEngineContext::new(renderer.device())
+            .ok()
+            .map(Arc::new);
 
         Ok(Self {
             workerw: SendHwnd(workerw),
             host_window: SendHwnd(host_window),
             renderer: Arc::new(Mutex::new(renderer)),
+            occlusion: Arc::new(Mutex::new(OcclusionDetector::new(pause_on_battery))),
+            video_player: Arc::new(Mutex::new(VideoWallpaperPlayer::new())),
+            _media_context: media_context,
         })
     }
 
@@ -46,13 +59,39 @@ impl WallpaperEngine {
         self.host_window.0
     }
 
-    pub fn render_frame(&self, color: [f32; 4]) -> Result<()> {
+    pub fn occlusion_state(&self) -> Result<OcclusionState> {
+        let detector = self
+            .occlusion
+            .lock()
+            .map_err(|e| atelier_common::error::AtelierError::Generic(e.to_string()))?;
+        Ok(detector.check_state())
+    }
+
+    pub fn video_player(&self) -> Arc<Mutex<VideoWallpaperPlayer>> {
+        self.video_player.clone()
+    }
+
+    pub fn render_frame(&self, color: [f32; 4]) -> Result<bool> {
+        let is_occluded = {
+            let detector = self
+                .occlusion
+                .lock()
+                .map_err(|e| atelier_common::error::AtelierError::Generic(e.to_string()))?;
+            detector.should_pause()
+        };
+
+        if is_occluded {
+            return Ok(false);
+        }
+
         let renderer = self
             .renderer
             .lock()
             .map_err(|e| atelier_common::error::AtelierError::Generic(e.to_string()))?;
         renderer.clear(color);
-        renderer.present()
+        renderer.present()?;
+
+        Ok(true)
     }
 }
 
