@@ -1,4 +1,6 @@
-# atelier-taskbar
+# taskbar
+
+Directory: [`crates/taskbar`](../../crates/taskbar/) · Cargo package: `atelier-taskbar`
 
 The taskbar manager discovers Explorer taskbar windows, applies composition styles and optional floating regions, controls position and coordinates reset/recovery. `accent.rs` and `style.rs` handle composition; `discovery.rs` finds windows; `dock.rs` changes native window regions; `position.rs` manages native edge changes and a guardian; `recovery.rs` listens for Explorer recreation.
 

@@ -1,4 +1,6 @@
-# atelier-core
+# core
+
+Directory: [`crates/core`](../../crates/core/) · Cargo package: `atelier-core`
 
 This crate contains the experimental native daemon, tray actions and IPC types. The binary starts its own taskbar manager, attempts wallpaper and audio initialization, and opens the Studio HTML in a browser. That HTML does not have Tauri IPC when opened this way. The production-oriented interactive Studio entry point is `atelier-ui`; the daemon is not a required service behind it.
 

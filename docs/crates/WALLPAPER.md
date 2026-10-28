@@ -1,4 +1,6 @@
-# atelier-wallpaper
+# wallpaper
+
+Directory: [`crates/wallpaper`](../../crates/wallpaper/) · Cargo package: `atelier-wallpaper`
 
 The wallpaper subsystem contains `workerw.rs` for desktop host windows, `renderer.rs` for Direct3D 11 rendering, `video.rs` for Media Foundation and player state, and `occlusion.rs` for pause decisions. `WallpaperEngine` connects these pieces and cleans up its host window on drop.
 

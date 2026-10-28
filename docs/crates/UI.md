@@ -1,4 +1,6 @@
-# atelier-ui
+# ui
+
+Directory: [`crates/ui`](../../crates/ui/) · Cargo package: `atelier-ui`
 
 `atelier-ui` is the Tauri Studio. `src/main.rs` dispatches helper and test modes; `src/lib.rs` configures state, IPC, tray and window lifecycle. `ui/index.html` is the Studio; `studio-dock.js` manages its dock controls. `ui/dock.html` and `dock.js` implement the separate dock window.
 

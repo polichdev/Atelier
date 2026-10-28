@@ -3,7 +3,18 @@
 [![Rust](https://img.shields.io/badge/Rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D7?logo=windows)](docs/COMPATIBILITY.md)
+[![Win32](https://img.shields.io/badge/Windows-Win32%20API-0078D7?logo=windows)](docs/crates/TASKBAR.md)
+[![WebView2](https://img.shields.io/badge/UI-WebView2-0078D7?logo=microsoftedge)](docs/crates/UI.md)
+[![C++ XAML bridge](https://img.shields.io/badge/Native-C%2B%2B%20XAML%20bridge-00599C?logo=cplusplus)](docs/crates/TASKBAR.md)
+[![Direct3D 11](https://img.shields.io/badge/Graphics-Direct3D%2011-0078D7?logo=windows)](docs/crates/WALLPAPER.md)
+[![WASAPI](https://img.shields.io/badge/Audio-WASAPI-7D57C1)](docs/crates/AUDIO.md)
 [![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue)](#license)
+
+[![Taskbar styling](https://img.shields.io/badge/Windows%20Taskbar-Styles%20%26%20Presets-3182CE)](#features)
+[![Desktop dock](https://img.shields.io/badge/macOS%20Taskbar-Desktop%20Dock-8B5CF6)](#features)
+[![Multi-monitor](https://img.shields.io/badge/Dock-Multi--monitor-14B8A6)](docs/crates/UI.md)
+[![Recovery](https://img.shields.io/badge/Shell-Recovery%20Helpers-22A06B)](docs/FAILURES_AND_RECOVERY.md)
+[![In development](https://img.shields.io/badge/Wallpaper%20%2F%20Audio%20%2F%20Widgets-In%20Development-D97706)](#features)
 
 Atelier is a Windows desktop customization project built with Rust and Tauri v2. Its Studio can customize the Explorer taskbar and provide an optional, separate macOS-style dock. Wallpaper, audio and widget subsystems exist in the workspace, but their Studio controls are still in development.
 
@@ -47,9 +58,15 @@ The Tauri application is the primary Studio entry point. The separate `atelier-c
 
 ### Crate references
 
-- [`atelier-common`](docs/crates/COMMON.md) · [`atelier-core`](docs/crates/CORE.md)
-- [`atelier-taskbar`](docs/crates/TASKBAR.md) · [`atelier-ui`](docs/crates/UI.md)
-- [`atelier-wallpaper`](docs/crates/WALLPAPER.md) · [`atelier-audio`](docs/crates/AUDIO.md) · [`atelier-widget`](docs/crates/WIDGET.md)
+The names below match the directories in `crates/`. Cargo package names retain the `atelier-` prefix.
+
+- [`common`](docs/crates/COMMON.md) — configuration, presets and errors.
+- [`core`](docs/crates/CORE.md) — experimental daemon and tray.
+- [`taskbar`](docs/crates/TASKBAR.md) — Explorer styling, positioning and recovery.
+- [`ui`](docs/crates/UI.md) — Studio and the separate dock.
+- [`wallpaper`](docs/crates/WALLPAPER.md) — wallpaper infrastructure.
+- [`audio`](docs/crates/AUDIO.md) — audio capture and spectrum analysis.
+- [`widget`](docs/crates/WIDGET.md) — widget infrastructure.
 
 ## Build and run
 

@@ -21,12 +21,14 @@ atelier/
 
 ## Crate reference
 
-| Crate | Reference |
-| --- | --- |
-| `atelier-common` | [Configuration and presets](crates/COMMON.md) |
-| `atelier-core` | [Experimental daemon](crates/CORE.md) |
-| `atelier-taskbar` | [Taskbar integration](crates/TASKBAR.md) |
-| `atelier-ui` | [Studio and desktop dock](crates/UI.md) |
-| `atelier-wallpaper` | [Wallpaper infrastructure](crates/WALLPAPER.md) |
-| `atelier-audio` | [Audio capture](crates/AUDIO.md) |
-| `atelier-widget` | [Widget infrastructure](crates/WIDGET.md) |
+Directory names and Cargo package names differ. Use the package name with `cargo -p`.
+
+| Directory | Cargo package | Reference |
+| --- | --- | --- |
+| `crates/common` | `atelier-common` | [Configuration and presets](crates/COMMON.md) |
+| `crates/core` | `atelier-core` | [Experimental daemon](crates/CORE.md) |
+| `crates/taskbar` | `atelier-taskbar` | [Taskbar integration](crates/TASKBAR.md) |
+| `crates/ui` | `atelier-ui` | [Studio and desktop dock](crates/UI.md) |
+| `crates/wallpaper` | `atelier-wallpaper` | [Wallpaper infrastructure](crates/WALLPAPER.md) |
+| `crates/audio` | `atelier-audio` | [Audio capture](crates/AUDIO.md) |
+| `crates/widget` | `atelier-widget` | [Widget infrastructure](crates/WIDGET.md) |

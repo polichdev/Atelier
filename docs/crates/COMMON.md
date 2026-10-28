@@ -1,4 +1,6 @@
-# atelier-common
+# common
+
+Directory: [`crates/common`](../../crates/common/) · Cargo package: `atelier-common`
 
 Shared Rust types used across the workspace. `config.rs` defines `TaskbarStyle`, taskbar geometry and `TaskbarAppearance`, including default values and normalization. `presets.rs` defines named taskbar presets; `error.rs` defines shared errors. `AtelierConfig` includes autostart and taskbar configuration, but an available field does not by itself establish a complete Studio feature.
 
