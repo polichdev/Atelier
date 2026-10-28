@@ -8,7 +8,7 @@
 [![C++ XAML bridge](https://img.shields.io/badge/Native-C%2B%2B%20XAML%20bridge-00599C?logo=cplusplus)](docs/crates/TASKBAR.md)
 [![Direct3D 11](https://img.shields.io/badge/Graphics-Direct3D%2011-0078D7?logo=windows)](docs/crates/WALLPAPER.md)
 [![WASAPI](https://img.shields.io/badge/Audio-WASAPI-7D57C1)](docs/crates/AUDIO.md)
-[![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue)](#license)
+[![License](https://img.shields.io/badge/License-Apache--2.0-blue)](#license)
 
 [![Taskbar styling](https://img.shields.io/badge/Windows%20Taskbar-Styles%20%26%20Presets-3182CE)](#features)
 [![Desktop dock](https://img.shields.io/badge/macOS%20Taskbar-Desktop%20Dock-8B5CF6)](#features)
@@ -91,4 +91,4 @@ The repository also contains an isolated dock smoke test and Playwright UI tests
 
 ## License
 
-The workspace declares `MIT OR Apache-2.0` in `Cargo.toml`. License text files are not currently included in the repository.
+Atelier is licensed under the [Apache License 2.0](LICENSE).
