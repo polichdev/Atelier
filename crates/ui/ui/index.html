@@ -94,7 +94,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   margin-bottom:14px;
 }
 
-.grid-2{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,0.95fr);gap:18px;align-items:start}
+.grid-2{display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
 .col-stack{display:grid;gap:18px;align-content:start}
 
 .card{
@@ -242,135 +242,6 @@ input[type=color]{
   font-variant-numeric:tabular-nums;font-weight:600;
 }
 
-.preview-card{overflow:hidden}
-.preview-stage{
-  height:195px;position:relative;overflow:hidden;
-  background:radial-gradient(circle at 75% 20%,#273456 0%,#111628 50%,#090b12 100%);
-  display:flex;flex-direction:column;justify-content:space-between;
-}
-.preview-wallpaper{
-  position:absolute;inset:0;
-  background:
-    radial-gradient(ellipse at 30% 40%, rgba(90,60,140,0.25) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 80%, rgba(30,90,160,0.2) 0%, transparent 50%),
-    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size:100% 100%, 100% 100%, 20px 20px, 20px 20px;
-}
-.preview-mock-window{
-  position:relative;margin:14px auto 0;
-  width:68%;height:84px;border-radius:7px;
-  background:rgba(18,20,28,0.85);
-  border:1px solid rgba(255,255,255,0.12);
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  box-shadow:0 12px 30px rgba(0,0,0,0.55);
-  display:flex;flex-direction:column;overflow:hidden;
-}
-.mock-header{
-  height:20px;padding:0 8px;display:flex;align-items:center;gap:5px;
-  background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);
-}
-.mock-dot{width:6px;height:6px;border-radius:50%}
-.mock-dot.red{background:#e06c75}
-.mock-dot.yellow{background:#e5c07b}
-.mock-dot.green{background:#98c379}
-.mock-title{font-size:8.5px;color:rgba(255,255,255,0.4);margin-left:auto;margin-right:auto}
-.mock-body{padding:10px;display:flex;flex-direction:column;gap:6px}
-.mock-line{height:4px;border-radius:2px;background:rgba(255,255,255,0.08)}
-
-#preview-bar{
-  position:absolute;bottom:0;left:0;right:0;height:40px;
-  display:flex;align-items:center;justify-content:space-between;padding:0 14px;
-  border-top:1px solid rgba(255,255,255,0.08);
-  transition:left .18s cubic-bezier(0.16,1,0.3,1),right .18s cubic-bezier(0.16,1,0.3,1),bottom .18s cubic-bezier(0.16,1,0.3,1),border-radius .18s cubic-bezier(0.16,1,0.3,1),background .18s;
-  z-index:2;
-}
-#preview-bar.dock{
-  bottom:8px;
-  border:1px solid rgba(255,255,255,0.18);
-  box-shadow:0 8px 24px rgba(0,0,0,0.55);
-}
-#preview-bar.clear{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
-#preview-bar.blur{
-  background:rgba(18,20,30,0.55);
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  border-color:rgba(255,255,255,0.22);
-}
-#preview-bar.acrylic{
-  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
-  border-color:rgba(255,255,255,0.24);
-}
-#preview-bar.mica{
-  background:rgba(26,28,40,0.85);
-  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border-color:rgba(255,255,255,0.16);
-}
-#preview-bar.default{
-  background:#1a1c22;
-  border-color:transparent;
-}
-.p-start{
-  display:flex;align-items:center;color:#4aa4ff;opacity:.95;flex-shrink:0;
-}
-.p-apps{
-  display:flex;align-items:center;justify-content:center;gap:clamp(1px,calc(100% / 120),4px);overflow:hidden;padding:0 6px;flex:1;min-width:0;height:100%;
-}
-.p-app-item{
-  display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
-  position:relative;height:100%;padding:1px 0 2px;flex-shrink:1;
-}
-.p-app-img{
-  width:clamp(10px,calc((100% - 16px) / var(--app-count, 15)),20px);
-  height:clamp(10px,calc((100% - 16px) / var(--app-count, 15)),20px);
-  max-width:20px;max-height:20px;border-radius:4px;object-fit:contain;aspect-ratio:1/1;flex-shrink:1;
-  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4));
-  transition:transform .12s;
-}
-.p-app-item:hover .p-app-img{transform:scale(1.15) translateY(-2px)}
-.p-app-indicator{
-  height:2.5px;border-radius:1.5px;margin-top:2px;flex-shrink:0;opacity:0;
-}
-.p-app-indicator.running{
-  width:5px;background:rgba(255,255,255,0.7);opacity:1;
-}
-.p-app-indicator.active{
-  width:13px;background:#4aa4ff;box-shadow:0 0 5px rgba(74,164,255,0.7);opacity:1;
-}
-.p-app-dot{
-  width:18px;height:18px;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.25);flex-shrink:0;
-}
-.p-tray{
-  display:flex;align-items:center;gap:8px;flex-shrink:0;
-}
-.p-lang{
-  font-size:9.5px;font-weight:700;letter-spacing:.05em;
-  color:rgba(255,255,255,0.7);text-transform:uppercase;
-  padding:1px 4px;border-radius:3px;background:rgba(255,255,255,0.06);
-}
-.p-clock{
-  font-size:10px;color:rgba(255,255,255,0.85);font-variant-numeric:tabular-nums;font-weight:600;
-}
-
-.preview-caption{
-  padding:10px 18px;border-top:1px solid var(--border);
-  font-size:11px;color:var(--muted2);
-}
-
-.presets-grid{
-  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:1px;background:var(--border);
-}
-.preset{
-  background:var(--surface);
-  padding:14px 16px;text-align:left;
-  border-left:2px solid transparent;
-  transition:border-color .1s,background .1s;
-}
-.preset:hover{background:var(--surface2)}
-.preset.active{border-left-color:var(--warm);background:var(--accent-bg)}
-.preset strong{display:block;font-size:12.5px;font-weight:600;color:var(--text)}
-.preset small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
-
 select.inline-select{
   font-size:11.5px;padding:4px 8px;border-radius:5px;
   background:var(--surface2);border:1px solid var(--border-strong);
@@ -465,7 +336,6 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
   .material-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 @media(max-width:480px){
-  .presets-grid{grid-template-columns:1fr}
   .field-row{flex-direction:column;align-items:stretch;gap:10px}
   input[type=range]{width:100%}
   .material-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -652,8 +522,6 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
                         <rect x="77" y="10" width="24" height="24" rx="5" fill="#ffa726"/>
                       </g>
                       <g id="island-tray-group" transform="translate(646, 0)">
-                        <rect x="0" y="13" width="24" height="18" rx="3" fill="rgba(255,255,255,0.06)"/>
-                        <text id="island-svg-lang" x="12" y="25.5" font-size="8.5" font-weight="700" fill="rgba(255,255,255,0.7)" text-anchor="middle" font-family="'Segoe UI Variable','Segoe UI',sans-serif">УКР</text>
                         <text id="island-svg-clock" x="62" y="26" font-size="9" font-weight="600" fill="rgba(255,255,255,0.85)" text-anchor="end" font-family="'Segoe UI Variable','Segoe UI',sans-serif">12:48</text>
                       </g>
                     </svg>
@@ -693,69 +561,7 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
 
             </div>
 
-            <div class="col-stack">
 
-              <div class="card preview-card">
-                <div class="card-title">Windows taskbar preview</div>
-                <div class="preview-stage">
-                  <div class="preview-wallpaper"></div>
-                  <div class="preview-mock-window">
-                    <div class="mock-header">
-                      <span class="mock-dot red"></span>
-                      <span class="mock-dot yellow"></span>
-                      <span class="mock-dot green"></span>
-                      <span class="mock-title">Workspace</span>
-                    </div>
-                    <div class="mock-body">
-                      <div class="mock-line" style="width:42%"></div>
-                      <div class="mock-line" style="width:68%"></div>
-                    </div>
-                  </div>
-                  <div id="preview-bar" class="clear dock">
-                    <div class="p-start">
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2.3l6.5-.9v6.1H0V2.3zm0 7.7h6.5v6.1L0 15.2V10zm7.5-8.7L16 0v7.5H7.5V1.3zm0 8.7H16v7.5l-8.5-1.3V10z"/></svg>
-                    </div>
-                    <div class="p-apps" id="preview-apps">
-                    </div>
-                    <div class="p-tray">
-                      <span class="p-lang" id="preview-lang">УКР</span>
-                      <span class="p-clock" id="preview-clock">12:48</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="card">
-                <div class="card-title">Windows taskbar presets</div>
-                <div class="presets-grid">
-                  <button class="preset" data-preset="macos sonoma">
-                    <strong>macOS Sonoma</strong>
-                    <small>Liquid glass dock</small>
-                  </button>
-                  <button class="preset" data-preset="macos big sur">
-                    <strong>macOS Big Sur</strong>
-                    <small>Frosted acrylic dock</small>
-                  </button>
-                  <button class="preset" data-preset="cupertino dark">
-                    <strong>Cupertino Dark</strong>
-                    <small>Obsidian blurred glass</small>
-                  </button>
-                  <button class="preset" data-preset="cupertino light">
-                    <strong>Cupertino Light</strong>
-                    <small>Milky translucent glass</small>
-                  </button>
-                  <button class="preset" data-preset="clean glass">
-                    <strong>Clean Glass</strong>
-                    <small>Crystal transparent dock</small>
-                  </button>
-                  <button class="preset" data-preset="windows default">
-                    <strong>Windows Stock</strong>
-                    <small>Default Windows 11</small>
-                  </button>
-                </div>
-              </div>
-
-            </div>
           </div>
 
         </section>
@@ -878,7 +684,6 @@ sidebarToggle.addEventListener('click',()=>{
 let config={style:'Clear',floating_dock:true,floating_margin:24,corner_radius:16};
 let ready=false,busy=false,queued=false,saveTimer,toastTimer,resetting=false,saveDone=Promise.resolve();
 let realPreviewData=null;
-const names={Clear:'Clear',Blur:'Blur',Acrylic:'Acrylic',Mica:'Mica',Default:'Windows'};
 
 function toast(message,error=false){
   const t=el('toast');
@@ -1044,48 +849,7 @@ function paint(c,remember=true){
 
   updateIslandSVG(isDock,c.floating_margin,c.corner_radius,c.vertical_gap!==undefined?c.vertical_gap:4);
 
-  const bar=el('preview-bar');
-  if(bar){
-    bar.className=s.toLowerCase()+(isDock?' dock':'');
-    const previewMargin=isDock?Math.min(75,Math.round((c.floating_margin/600)*75)):0;
-    const previewBottom=isDock?Math.min(8,Math.max(1,c.vertical_gap!==undefined?c.vertical_gap:4)):0;
-    bar.style.left=bar.style.right=previewMargin+'px';
-    bar.style.bottom=previewBottom+'px';
-    bar.style.borderRadius=isDock?(c.corner_radius||18)+'px':'0';
-    if(c.hide_top_border&&!isDock){
-      bar.style.borderTop='none';
-    }else if(!isDock){
-      bar.style.borderTop='1px solid rgba(255,255,255,0.08)';
-    }
-    if(s==='Clear'){
-      bar.style.backgroundColor='rgba(255,255,255,0.06)';
-      bar.style.backdropFilter='blur(8px)';
-      bar.style.borderColor=isDock?'rgba(255,255,255,0.3)':'transparent';
-    }else if(s==='Blur'){
-      bar.style.backgroundColor='rgba(18,22,32,0.62)';
-      bar.style.backdropFilter='blur(18px)';
-      bar.style.borderColor=isDock?'rgba(255,255,255,0.25)':'transparent';
-    }else if(s==='Acrylic'&&c.style?.Acrylic){
-      const p=tintParts(c.style.Acrylic.tint);
-      const alpha=(p.alpha/255*0.8).toFixed(2);
-      const r=parseInt(p.hex.slice(1,3),16);
-      const g=parseInt(p.hex.slice(3,5),16);
-      const b=parseInt(p.hex.slice(5,7),16);
-      bar.style.backgroundColor=`rgba(${r},${g},${b},${alpha})`;
-      bar.style.backdropFilter='blur(20px)';
-      bar.style.borderColor=isDock?((r+g+b>500)?'rgba(0,0,0,0.18)':'rgba(255,255,255,0.26)'):'transparent';
-    }else if(s==='Mica'){
-      bar.style.backgroundColor='rgba(24,26,38,0.88)';
-      bar.style.backdropFilter='blur(24px)';
-      bar.style.borderColor=isDock?'rgba(255,255,255,0.18)':'transparent';
-    }else{
-      bar.style.backgroundColor='#1a1c22';
-      bar.style.backdropFilter='none';
-      bar.style.borderColor='transparent';
-    }
-  }
 
-  all('.preset').forEach(b=>b.classList.remove('active'));
 }
 
 async function loadPreviewInfo(){
@@ -1107,41 +871,8 @@ function renderPreviewApps(){
   const pillW=Math.max(340,totalW-inset*2);
   const pillX=inset;
 
-  const bar=el('preview-bar');
-  const previewApps=el('preview-apps');
-  if(previewApps&&apps.length>0){
-    previewApps.replaceChildren();
-    const count=apps.length;
-    previewApps.style.setProperty('--app-count', count);
-    apps.forEach(app=>{
-      const item=document.createElement('div');
-      item.className='p-app-item';
-      item.title=app.name;
-
-      const img=document.createElement('img');
-      img.className='p-app-img';
-      img.src=app.icon;
-      img.alt=app.name;
-      item.append(img);
-
-      if(app.is_active||app.is_running){
-        const ind=document.createElement('span');
-        ind.className='p-app-indicator '+(app.is_active?'active':'running');
-        item.append(ind);
-      }
-
-      previewApps.append(item);
-    });
-  }
-  const clockEl=el('preview-clock');
-  if(clockEl&&realPreviewData.clock)clockEl.textContent=realPreviewData.clock;
-  const langEl=el('preview-lang');
-  if(langEl&&realPreviewData.language)langEl.textContent=realPreviewData.language;
-
   const svgClock=el('island-svg-clock');
   if(svgClock&&realPreviewData.clock)svgClock.textContent=realPreviewData.clock;
-  const svgLang=el('island-svg-lang');
-  if(svgLang&&realPreviewData.language)svgLang.textContent=realPreviewData.language;
 
   const svgApps=el('island-apps-group');
   if(svgApps&&apps.length>0){
@@ -1292,17 +1023,6 @@ el('hide-border').addEventListener('change',()=>{
   paint(c,false);
   save();
 });
-
-all('.preset').forEach(b=>b.addEventListener('click',async()=>{
-  if(!ready)return;
-  if(b.dataset.preset==='windows default'){await restoreWindows();return}
-  try{
-    await invoke('apply_preset',{name:b.dataset.preset});
-    paint(await invoke('get_taskbar_config'));
-    b.classList.add('active');
-    toast('Preset applied');
-  }catch(e){toast('Preset failed: '+e,true)}
-}));
 
 const restoreBtn=el('btn-restore-default');
 if(restoreBtn){
