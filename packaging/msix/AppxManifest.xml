@@ -20,7 +20,7 @@
   </Capabilities>
   <Applications>
     <Application Id="AtelierApp"
-                 Executable="atelier-core.exe"
+                 Executable="Atelier.exe"
                  EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements DisplayName="Atelier"
                           Description="Atelier Workspace Engine"
