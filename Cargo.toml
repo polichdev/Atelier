@@ -15,6 +15,9 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 
+[profile.dev]
+incremental = false
+
 [workspace.dependencies]
 atelier-common = { path = "crates/common" }
 atelier-taskbar = { path = "crates/taskbar" }
