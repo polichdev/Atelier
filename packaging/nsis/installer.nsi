@@ -7,8 +7,8 @@ InstallDir "$LOCALAPPDATA\Atelier"
 RequestExecutionLevel user
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "crates\atelier-ui\icons\icon.ico"
-!define MUI_UNICON "crates\atelier-ui\icons\icon.ico"
+!define MUI_ICON "crates\ui\icons\icon.ico"
+!define MUI_UNICON "crates\ui\icons\icon.ico"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES

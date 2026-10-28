@@ -23,8 +23,8 @@ flowchart TB
 
 ## Startup and shutdown
 
-1. `atelier-ui/src/main.rs` handles helper-process and debug fixture arguments before starting the UI.
-2. `atelier-ui/src/lib.rs` constructs a default taskbar manager and starts its Explorer recovery listener. Saved taskbar styling is not automatically applied at startup.
+1. `crates/ui/src/main.rs` handles helper-process and debug fixture arguments before starting the UI.
+2. `crates/ui/src/lib.rs` constructs a default taskbar manager and starts its Explorer recovery listener. Saved taskbar styling is not automatically applied at startup.
 3. The app attempts to initialize wallpaper and audio, creates the widget subsystem, opens the Tauri window and tray, and starts the dock from its saved settings.
 4. Closing the main window or selecting Quit shuts down the dock, restores taskbar changes through the manager, and exits. The tray can also request a Windows reset.
 

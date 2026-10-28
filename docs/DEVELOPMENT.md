@@ -32,7 +32,7 @@ The PowerShell script builds an isolated test copy under `target/` and uses fixt
 
 ### Taskbar integration tests
 
-`crates/atelier-taskbar/tests/` includes tests that operate on real Explorer taskbars. The optional `xaml-probe` feature builds the native fixture and probe. Inspect the test before running it; do not confuse an isolated XAML fixture with a test against Explorer itself.
+`crates/taskbar/tests/` includes tests that operate on real Explorer taskbars. The optional `xaml-probe` feature builds the native fixture and probe. Inspect the test before running it; do not confuse an isolated XAML fixture with a test against Explorer itself.
 
 ## Packaging
 

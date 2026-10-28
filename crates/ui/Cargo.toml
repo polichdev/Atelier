@@ -23,7 +23,7 @@ atelier-taskbar.workspace = true
 atelier-wallpaper.workspace = true
 atelier-audio.workspace = true
 atelier-widget.workspace = true
-atelier-core = { path = "../atelier-core" }
+atelier-core = { path = "../core" }
 mimalloc.workspace = true
 tokio.workspace = true
 serde.workspace = true

@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/atelier-common",
-    "crates/atelier-core",
-    "crates/atelier-taskbar",
-    "crates/atelier-wallpaper",
-    "crates/atelier-audio",
-    "crates/atelier-widget",
-    "crates/atelier-ui",
+    "crates/common",
+    "crates/core",
+    "crates/taskbar",
+    "crates/wallpaper",
+    "crates/audio",
+    "crates/widget",
+    "crates/ui",
 ]
 
 [workspace.package]
@@ -16,11 +16,11 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-atelier-common = { path = "crates/atelier-common" }
-atelier-taskbar = { path = "crates/atelier-taskbar" }
-atelier-wallpaper = { path = "crates/atelier-wallpaper" }
-atelier-audio = { path = "crates/atelier-audio" }
-atelier-widget = { path = "crates/atelier-widget" }
+atelier-common = { path = "crates/common" }
+atelier-taskbar = { path = "crates/taskbar" }
+atelier-wallpaper = { path = "crates/wallpaper" }
+atelier-audio = { path = "crates/audio" }
+atelier-widget = { path = "crates/widget" }
 
 mimalloc = { version = "0.1", default-features = false }
 windows = { version = "0.58" }

@@ -32,7 +32,7 @@ async function fixture(file){
       return null;
     }}};
   });
-  await page.goto(pathToFileURL(path.resolve('crates/atelier-ui/ui',file)).href);
+  await page.goto(pathToFileURL(path.resolve('crates/ui/ui',file)).href);
   if(file==='index.html')await page.locator('#desktop-dock-details summary').click();
   return{page,errors};
 }

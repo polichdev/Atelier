@@ -140,11 +140,11 @@ fn open_theme_studio() {
     let ui_path = std::env::current_dir()
         .map(|p| {
             p.join("crates")
-                .join("atelier-ui")
+                .join("ui")
                 .join("ui")
                 .join("index.html")
         })
-        .unwrap_or_else(|_| std::path::PathBuf::from("crates/atelier-ui/ui/index.html"));
+        .unwrap_or_else(|_| std::path::PathBuf::from("crates/ui/ui/index.html"));
 
     let url = format!("file:///{}", ui_path.display()).replace('\\', "/");
     let app_arg = format!("--app={url}");
