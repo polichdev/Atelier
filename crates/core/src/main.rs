@@ -26,7 +26,7 @@ fn main() -> anyhow::Result<()> {
             corner_radius: 12,
             vertical_gap: 4,
             hide_top_border: true,
-                appearance: Default::default(),
+            appearance: Default::default(),
         },
         ..Default::default()
     };
@@ -138,12 +138,7 @@ fn main() -> anyhow::Result<()> {
 
 fn open_theme_studio() {
     let ui_path = std::env::current_dir()
-        .map(|p| {
-            p.join("crates")
-                .join("ui")
-                .join("ui")
-                .join("index.html")
-        })
+        .map(|p| p.join("crates").join("ui").join("ui").join("index.html"))
         .unwrap_or_else(|_| std::path::PathBuf::from("crates/ui/ui/index.html"));
 
     let url = format!("file:///{}", ui_path.display()).replace('\\', "/");

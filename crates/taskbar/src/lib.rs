@@ -1,18 +1,18 @@
 pub mod accent;
 pub mod discovery;
 pub mod dock;
+pub mod position;
 pub mod recovery;
 pub mod style;
 pub mod xaml;
-pub mod position;
 
-use atelier_common::config::{TaskbarConfig, TaskbarStyle,TaskbarAppearance};
+use atelier_common::config::{TaskbarAppearance, TaskbarConfig, TaskbarStyle};
 use atelier_common::error::Result;
 use discovery::find_all_taskbars;
 use dock::{apply_floating_dock, reset_floating_dock};
 use recovery::TaskbarRecoveryListener;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool,Ordering};
 use style::apply_taskbar_style;
 
 #[derive(Clone)]
@@ -28,7 +28,9 @@ pub struct TaskbarManager {
 impl TaskbarManager {
     pub fn new(mut config: TaskbarConfig) -> Self {
         config.appearance.normalize();
-        if matches!(config.appearance.position,0|2){config.floating_dock=false;}
+        if matches!(config.appearance.position, 0 | 2) {
+            config.floating_dock = false;
+        }
         Self {
             config: Arc::new(Mutex::new(config)),
             recovery: Arc::new(Mutex::new(None)),
@@ -56,9 +58,9 @@ impl TaskbarManager {
         };
 
         self.position.apply(config.appearance.position)?;
-        let mut buttons=config.appearance.clone();
-        buttons.position=-1;
-        let custom_buttons=buttons!=TaskbarAppearance::default();
+        let mut buttons = config.appearance.clone();
+        buttons.position = -1;
+        let custom_buttons = buttons != TaskbarAppearance::default();
         let taskbars = find_all_taskbars();
         if taskbars.is_empty() {
             return Err(atelier_common::error::AtelierError::Platform(
@@ -67,10 +69,14 @@ impl TaskbarManager {
         }
         for &hwnd in &taskbars {
             apply_taskbar_style(hwnd, config.style, config.hide_top_border)?;
-            if custom_buttons||self.appearance_applied.load(Ordering::Relaxed) {
-                if !discovery::has_xaml_background(hwnd){return Err(atelier_common::error::AtelierError::Platform("Native icon customization requires the Windows 11 XAML taskbar".into()))}
-                self.appearance_applied.store(true,Ordering::Relaxed);
-                xaml::apply_native_appearance(hwnd,&config.appearance)?;
+            if custom_buttons || self.appearance_applied.load(Ordering::Relaxed) {
+                if !discovery::has_xaml_background(hwnd) {
+                    return Err(atelier_common::error::AtelierError::Platform(
+                        "Native icon customization requires the Windows 11 XAML taskbar".into(),
+                    ));
+                }
+                self.appearance_applied.store(true, Ordering::Relaxed);
+                xaml::apply_native_appearance(hwnd, &config.appearance)?;
             }
 
             if config.floating_dock {
@@ -85,7 +91,8 @@ impl TaskbarManager {
                 reset_floating_dock(hwnd, config.hide_top_border)?;
             }
         }
-        self.appearance_applied.store(custom_buttons,Ordering::Relaxed);
+        self.appearance_applied
+            .store(custom_buttons, Ordering::Relaxed);
 
         Ok(())
     }
@@ -110,7 +117,9 @@ impl TaskbarManager {
 
     pub fn set_config(&self, mut config: TaskbarConfig) -> Result<()> {
         config.appearance.normalize();
-        if matches!(config.appearance.position,0|2){config.floating_dock=false;}
+        if matches!(config.appearance.position, 0 | 2) {
+            config.floating_dock = false;
+        }
         let previous = {
             let mut lock = self
                 .config
@@ -160,19 +169,23 @@ impl TaskbarManager {
             return Ok(());
         }
         self.set_config(TaskbarConfig {
-                style: TaskbarStyle::Default,
-                floating_dock: false,
-                floating_margin: 0,
-                corner_radius: 0,
-                vertical_gap: 0,
-                hide_top_border: false,
-                appearance: Default::default(),
-            })?;
+            style: TaskbarStyle::Default,
+            floating_dock: false,
+            floating_margin: 0,
+            corner_radius: 0,
+            vertical_gap: 0,
+            hide_top_border: false,
+            appearance: Default::default(),
+        })?;
         self.modified.store(false, Ordering::Relaxed);
         Ok(())
     }
-    pub fn repair_icons(&self)->Result<()>{
-        for hwnd in find_all_taskbars(){if discovery::has_xaml_background(hwnd){xaml::repair_native_icons(hwnd)?;}}
+    pub fn repair_icons(&self) -> Result<()> {
+        for hwnd in find_all_taskbars() {
+            if discovery::has_xaml_background(hwnd) {
+                xaml::repair_native_icons(hwnd)?;
+            }
+        }
         Ok(())
     }
 

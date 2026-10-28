@@ -156,7 +156,9 @@ impl DockState {
                 c.validate().is_ok()
             })
             .unwrap_or_default();
-        if !config.explicit_desktop_opt_in {config.enabled=false;}
+        if !config.explicit_desktop_opt_in {
+            config.enabled = false;
+        }
         config.hide_windows_taskbar = config.enabled;
         Self {
             config: Mutex::new(config),
@@ -392,12 +394,14 @@ fn file_icon(path: &str, state: &DockState) -> String {
     } else {
         String::new()
     };
-    if !icon.is_empty() { if let Ok(mut cache) = state.icons.lock() {
-        if cache.len() > 256 {
-            cache.clear()
+    if !icon.is_empty() {
+        if let Ok(mut cache) = state.icons.lock() {
+            if cache.len() > 256 {
+                cache.clear()
+            }
+            cache.insert(path.into(), icon.clone());
         }
-        cache.insert(path.into(), icon.clone());
-    }}
+    }
     icon
 }
 
@@ -406,14 +410,28 @@ fn window_icon(running: &[&Running]) -> String {
         let handle = hwnd(window.handle);
         let mut result = 0usize;
         for kind in [2, 0, 1] {
-            let delivered = unsafe { SendMessageTimeoutW(handle, WM_GETICON, windows::Win32::Foundation::WPARAM(kind), LPARAM(0), SMTO_ABORTIFHUNG, 100, Some(&mut result)) };
+            let delivered = unsafe {
+                SendMessageTimeoutW(
+                    handle,
+                    WM_GETICON,
+                    windows::Win32::Foundation::WPARAM(kind),
+                    LPARAM(0),
+                    SMTO_ABORTIFHUNG,
+                    100,
+                    Some(&mut result),
+                )
+            };
             if delivered.0 != 0 && result != 0 {
-                if let Some(icon) = super::hicon_to_bmp_base64(HICON(result as *mut _), 64) { return icon; }
+                if let Some(icon) = super::hicon_to_bmp_base64(HICON(result as *mut _), 64) {
+                    return icon;
+                }
             }
         }
         let icon = unsafe { GetClassLongPtrW(handle, GCLP_HICON) };
         if icon != 0 {
-            if let Some(icon) = super::hicon_to_bmp_base64(HICON(icon as *mut _), 64) { return icon; }
+            if let Some(icon) = super::hicon_to_bmp_base64(HICON(icon as *mut _), 64) {
+                return icon;
+            }
         }
     }
     String::new()
@@ -457,8 +475,12 @@ fn items(state: &DockState, c: &DockConfig) -> Vec<DockItem> {
             name: pin.name.clone(),
             icon: pin.icon.clone().unwrap_or_else(|| {
                 let mut icon = file_icon(&pin.path, state);
-                if icon.is_empty() && target != pin.path { icon = file_icon(&target, state); }
-                if icon.is_empty() { icon = window_icon(&matches); }
+                if icon.is_empty() && target != pin.path {
+                    icon = file_icon(&target, state);
+                }
+                if icon.is_empty() {
+                    icon = window_icon(&matches);
+                }
                 icon
             }),
             pinned: true,
@@ -490,7 +512,11 @@ fn items(state: &DockState, c: &DockConfig) -> Vec<DockItem> {
                     .into(),
                 icon: {
                     let icon = file_icon(&path, state);
-                    if icon.is_empty() { window_icon(&group) } else { icon }
+                    if icon.is_empty() {
+                        window_icon(&group)
+                    } else {
+                        icon
+                    }
                 },
                 pinned: false,
                 running: true,
@@ -730,7 +756,7 @@ pub async fn set_dock_config(
     mut config: DockConfig,
 ) -> Result<DockConfig, String> {
     config.validate()?;
-    config.explicit_desktop_opt_in=true;
+    config.explicit_desktop_opt_in = true;
     let state = app.state::<DockState>();
     let _write = state.write.lock().map_err(|e| e.to_string())?;
     let old = state.config.lock().map_err(|e| e.to_string())?.clone();
@@ -1037,7 +1063,11 @@ mod tests {
     }
     #[test]
     fn dock_visibility_controls_windows_taskbar_visibility() {
-        let mut c = DockConfig { enabled: true, hide_windows_taskbar: false, ..Default::default() };
+        let mut c = DockConfig {
+            enabled: true,
+            hide_windows_taskbar: false,
+            ..Default::default()
+        };
         c.validate().unwrap();
         assert!(c.hide_windows_taskbar);
         c.enabled = false;
@@ -1050,6 +1080,9 @@ mod tests {
         let system_root = std::env::var("SystemRoot").unwrap();
         let path = format!("{system_root}\\explorer.exe");
         let icon = file_icon(&path, &state);
-        assert!(icon.starts_with("data:image/png;base64,"), "No icon returned for {path}");
+        assert!(
+            icon.starts_with("data:image/png;base64,"),
+            "No icon returned for {path}"
+        );
     }
 }

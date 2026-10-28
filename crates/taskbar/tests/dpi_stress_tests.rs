@@ -2,6 +2,7 @@ use atelier_common::config::{TaskbarConfig, TaskbarStyle};
 use atelier_taskbar::TaskbarManager;
 
 #[test]
+#[ignore = "requires a live Explorer taskbar and changes its appearance"]
 fn test_taskbar_manager_lifecycle() {
     let config = TaskbarConfig {
         style: TaskbarStyle::Clear,
@@ -10,7 +11,7 @@ fn test_taskbar_manager_lifecycle() {
         corner_radius: 12,
         vertical_gap: 4,
         hide_top_border: true,
-                appearance: Default::default(),
+        appearance: Default::default(),
     };
 
     let manager = TaskbarManager::new(config);

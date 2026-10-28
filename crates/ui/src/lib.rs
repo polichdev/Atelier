@@ -12,15 +12,25 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 mod desktop_dock;
-pub fn watchdog_args()->bool{atelier_taskbar::position::guardian_args()||desktop_dock::watchdog_args()}
+pub fn watchdog_args() -> bool {
+    atelier_taskbar::position::guardian_args() || desktop_dock::watchdog_args()
+}
 #[cfg(debug_assertions)]
 #[path = "../tests/support/dock_fixture.rs"]
 mod dock_fixture;
 pub fn desktop_test_args() -> bool {
-    #[cfg(debug_assertions)] { return dock_fixture::run(); }
-    #[cfg(not(debug_assertions))] { false }
+    #[cfg(debug_assertions)]
+    {
+        dock_fixture::run()
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        false
+    }
 }
-fn dock_test_mode() -> bool { cfg!(debug_assertions) && std::env::var_os("ATELIER_DOCK_ONLY_TEST").is_some() }
+fn dock_test_mode() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("ATELIER_DOCK_ONLY_TEST").is_some()
+}
 
 pub struct AppState {
     pub taskbar: Arc<TaskbarManager>,
@@ -148,15 +158,21 @@ fn apply_preset(state: tauri::State<AppState>, name: String) -> Result<(), Strin
 #[tauri::command]
 fn reset_defaults(state: tauri::State<AppState>) -> Result<(), String> {
     state.taskbar.reset_all().map_err(|e| e.to_string())?;
-    state.taskbar.repair_icons().map_err(|e|e.to_string())?;
+    state.taskbar.repair_icons().map_err(|e| e.to_string())?;
     save_settings(&state.taskbar.config().map_err(|e| e.to_string())?)
 }
 #[tauri::command]
-fn repair_taskbar_icons(state:tauri::State<AppState>)->Result<TaskbarConfig,String>{
-    let mut config=state.taskbar.config().map_err(|e|e.to_string())?;
-    config.appearance.icon_size=0;config.appearance.hover_scale=100;
-    state.taskbar.repair_icons().map_err(|e|e.to_string())?;
-    state.taskbar.set_config(config.clone()).map_err(|e|e.to_string())?;save_settings(&config)?;Ok(config)
+fn repair_taskbar_icons(state: tauri::State<AppState>) -> Result<TaskbarConfig, String> {
+    let mut config = state.taskbar.config().map_err(|e| e.to_string())?;
+    config.appearance.icon_size = 0;
+    config.appearance.hover_scale = 100;
+    state.taskbar.repair_icons().map_err(|e| e.to_string())?;
+    state
+        .taskbar
+        .set_config(config.clone())
+        .map_err(|e| e.to_string())?;
+    save_settings(&config)?;
+    Ok(config)
 }
 
 #[tauri::command]
@@ -261,25 +277,45 @@ fn hicon_to_bmp_base64(
 
         let pixel_bytes = std::slice::from_raw_parts(bits as *const u8, (size * size * 4) as usize);
 
-        let has_alpha=pixel_bytes.chunks_exact(4).any(|p|p[3]!=0);
-        let mut rgba=Vec::with_capacity(pixel_bytes.len());
-        for p in pixel_bytes.chunks_exact(4) {
-            let alpha=if has_alpha {p[3]} else if p[..3].iter().any(|v|*v!=0) {255} else {0};
-            let unpremultiply=|v:u8| if alpha==0 {0} else {((v as u32*255)/(alpha as u32)).min(255) as u8};
-            rgba.extend_from_slice(&[unpremultiply(p[2]),unpremultiply(p[1]),unpremultiply(p[0]),alpha]);
+        let pixels = pixel_bytes.as_chunks::<4>().0;
+        let has_alpha = pixels.iter().any(|p| p[3] != 0);
+        let mut rgba = Vec::with_capacity(pixel_bytes.len());
+        for p in pixels {
+            let alpha = if has_alpha {
+                p[3]
+            } else if p[..3].iter().any(|v| *v != 0) {
+                255
+            } else {
+                0
+            };
+            let unpremultiply = |v: u8| {
+                if alpha == 0 {
+                    0
+                } else {
+                    ((v as u32 * 255) / (alpha as u32)).min(255) as u8
+                }
+            };
+            rgba.extend_from_slice(&[
+                unpremultiply(p[2]),
+                unpremultiply(p[1]),
+                unpremultiply(p[0]),
+                alpha,
+            ]);
         }
 
         SelectObject(hdc, old_bmp);
         let _ = DeleteObject(hbmp);
         let _ = DeleteDC(hdc);
 
-        let mut output=Vec::new();
+        let mut output = Vec::new();
         {
-            let mut encoder=png::Encoder::new(&mut output,size as u32,size as u32);
-            encoder.set_color(png::ColorType::Rgba);encoder.set_depth(png::BitDepth::Eight);
-            let mut writer=encoder.write_header().ok()?;writer.write_image_data(&rgba).ok()?;
+            let mut encoder = png::Encoder::new(&mut output, size as u32, size as u32);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().ok()?;
+            writer.write_image_data(&rgba).ok()?;
         }
-        Some(format!("data:image/png;base64,{}",base64_encode(&output)))
+        Some(format!("data:image/png;base64,{}", base64_encode(&output)))
     }
 }
 
@@ -508,7 +544,9 @@ pub fn run() {
             ) -> i32;
         }
         unsafe extern "system" fn ctrl_handler(_: u32) -> i32 {
-            if dock_test_mode() { return 0; }
+            if dock_test_mode() {
+                return 0;
+            }
             let taskbars = atelier_taskbar::discovery::find_all_taskbars();
             for &hwnd in &taskbars {
                 let _ = atelier_taskbar::style::apply_taskbar_style(
@@ -530,15 +568,25 @@ pub fn run() {
         ..Default::default()
     };
 
-    let taskbar = Arc::new(if dock_test_mode() { TaskbarManager::passive(config.taskbar) } else { TaskbarManager::new(config.taskbar) });
+    let taskbar = Arc::new(if dock_test_mode() {
+        TaskbarManager::passive(config.taskbar)
+    } else {
+        TaskbarManager::new(config.taskbar)
+    });
     if !dock_test_mode() {
         let _ = taskbar.start_recovery();
     }
 
-    let wallpaper = if dock_test_mode() { None } else { WallpaperEngine::new(true).ok().map(Arc::new) };
+    let wallpaper = if dock_test_mode() {
+        None
+    } else {
+        WallpaperEngine::new(true).ok().map(Arc::new)
+    };
 
     let audio = Arc::new(Mutex::new(AudioManager::new(0x00FF8800)));
-    if !dock_test_mode() { let _ = audio.lock().map(|mut a| a.start()); }
+    if !dock_test_mode() {
+        let _ = audio.lock().map(|mut a| a.start());
+    }
 
     let widget = Arc::new(WidgetSubsystem::new());
 
@@ -637,8 +685,10 @@ pub fn run() {
                         let _ = apply_preset(state, "nordic dark".to_string());
                     }
                     "reset" => {
-                        let dock_app=app.clone();
-                        tauri::async_runtime::spawn(async move {let _=desktop_dock::reset_desktop_dock(dock_app).await;});
+                        let dock_app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = desktop_dock::reset_desktop_dock(dock_app).await;
+                        });
                         let state = app.state::<AppState>();
                         let _ = reset_defaults(state);
                     }
@@ -677,10 +727,12 @@ pub fn run() {
             }
             #[cfg(debug_assertions)]
             if dock_test_mode() && std::env::var_os("ATELIER_DOCK_NATIVE_TEST").is_some() {
-                let app=app.handle().clone();
+                let app = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                    if let Some(window)=app.get_webview_window("main") {let _=window.eval(include_str!("../tests/dock-native.js"));}
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval(include_str!("../tests/dock-native.js"));
+                    }
                 });
             }
             Ok(())
@@ -710,10 +762,14 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                if window.label() != "main" { return; }
+                if window.label() != "main" {
+                    return;
+                }
                 window.state::<desktop_dock::DockState>().shutdown();
                 let state = window.state::<AppState>();
-                if !dock_test_mode() { let _ = state.taskbar.reset_all(); }
+                if !dock_test_mode() {
+                    let _ = state.taskbar.reset_all();
+                }
                 window.app_handle().exit(0);
             }
         })

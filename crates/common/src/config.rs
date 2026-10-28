@@ -53,7 +53,7 @@ impl Default for TaskbarAppearance {
 }
 impl TaskbarAppearance {
     pub fn normalize(&mut self) {
-        self.position=self.position.clamp(-1,3);
+        self.position = self.position.clamp(-1, 3);
         if self.icon_size > 0 {
             self.icon_size = self.icon_size.clamp(16, 64)
         }

@@ -11,7 +11,7 @@ use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 static XAML_BRIDGE_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/atelier_xaml.dll"));
 
 type ApplyBrushFn = unsafe extern "system" fn(u32, u32, u32, *const u16) -> windows::core::HRESULT;
-type RepairIconsFn=unsafe extern "system" fn(u32,*const u16)->windows::core::HRESULT;
+type RepairIconsFn = unsafe extern "system" fn(u32, *const u16) -> windows::core::HRESULT;
 type ApplyAppearanceFn = unsafe extern "system" fn(
     u32,
     u32,
@@ -127,8 +127,10 @@ fn initialize_bridge() -> Option<XamlBridge> {
     let appearance = unsafe {
         std::mem::transmute::<unsafe extern "system" fn() -> isize, ApplyAppearanceFn>(proc)
     };
-    let repair=unsafe{GetProcAddress(module,windows::core::s!("AtelierRepairIcons"))}?;
-    let repair=unsafe{std::mem::transmute::<unsafe extern "system" fn()->isize,RepairIconsFn>(repair)};
+    let repair = unsafe { GetProcAddress(module, windows::core::s!("AtelierRepairIcons")) }?;
+    let repair = unsafe {
+        std::mem::transmute::<unsafe extern "system" fn() -> isize, RepairIconsFn>(repair)
+    };
 
     tracing::debug!("XAML bridge DLL loaded and AtelierApplyBrush resolved successfully");
     Some(XamlBridge {
@@ -147,10 +149,17 @@ fn get_bridge() -> Option<&'static XamlBridge> {
 pub fn is_supported() -> bool {
     get_bridge().is_some()
 }
-pub fn repair_native_icons(hwnd:HWND)->Result<()>{
-    let bridge=get_bridge().ok_or_else(||AtelierError::Platform("The native taskbar XAML bridge could not be loaded".into()))?;
-    let mut pid=0;unsafe{GetWindowThreadProcessId(hwnd,Some(&mut pid))};
-    unsafe{(bridge.repair)(pid,bridge.dll_path.as_ptr())}.ok().map_err(|e|AtelierError::Platform(format!("Could not restore native icon rendering: {e}")))
+pub fn repair_native_icons(hwnd: HWND) -> Result<()> {
+    let bridge = get_bridge().ok_or_else(|| {
+        AtelierError::Platform("The native taskbar XAML bridge could not be loaded".into())
+    })?;
+    let mut pid = 0;
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    unsafe { (bridge.repair)(pid, bridge.dll_path.as_ptr()) }
+        .ok()
+        .map_err(|e| {
+            AtelierError::Platform(format!("Could not restore native icon rendering: {e}"))
+        })
 }
 
 pub fn apply_xaml_brush(hwnd: HWND, style: TaskbarStyle) -> Result<()> {

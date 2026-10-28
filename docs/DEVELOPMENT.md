@@ -32,7 +32,14 @@ The PowerShell script builds an isolated test copy under `target/` and uses fixt
 
 ### Taskbar integration tests
 
-`crates/taskbar/tests/` includes tests that operate on real Explorer taskbars. The optional `xaml-probe` feature builds the native fixture and probe. Inspect the test before running it; do not confuse an isolated XAML fixture with a test against Explorer itself.
+`crates/taskbar/tests/` includes tests that operate on real Explorer taskbars. Those tests are ignored by default; run them explicitly and serially only in a suitable interactive desktop session:
+
+```powershell
+cargo test -p atelier-taskbar --test dpi_stress_tests -- --ignored --test-threads=1
+cargo test -p atelier-taskbar --test xaml_bridge -- --ignored --test-threads=1
+```
+
+The optional `xaml-probe` feature builds the native fixture and probe. Inspect the test before running it; do not confuse an isolated XAML fixture with a test against Explorer itself.
 
 ## Packaging
 

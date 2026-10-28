@@ -8,7 +8,12 @@ fn main() {
         return;
     }
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    let revision=std::fs::read("native/xaml_bridge.cpp").unwrap().iter().fold(0xcbf29ce484222325u64,|h,b|(h^*b as u64).wrapping_mul(0x100000001b3));
+    let revision = std::fs::read("native/xaml_bridge.cpp")
+        .unwrap()
+        .iter()
+        .fold(0xcbf29ce484222325u64, |h, b| {
+            (h ^ *b as u64).wrapping_mul(0x100000001b3)
+        });
     let compiler = cc::Build::new().cpp(true).get_compiler();
     let status = compiler
         .to_command()
