@@ -23,6 +23,10 @@ fn main() -> anyhow::Result<()> {
             style: TaskbarStyle::Clear,
             floating_dock: false,
             floating_margin: 8,
+            corner_radius: 12,
+            vertical_gap: 4,
+            hide_top_border: true,
+                appearance: Default::default(),
         },
         ..Default::default()
     };
