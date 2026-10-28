@@ -7,6 +7,8 @@ InstallDir "$LOCALAPPDATA\Atelier"
 RequestExecutionLevel user
 
 !define MUI_ABORTWARNING
+!define MUI_ICON "crates\atelier-ui\icons\icon.ico"
+!define MUI_UNICON "crates\atelier-ui\icons\icon.ico"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -19,10 +21,10 @@ RequestExecutionLevel user
 
 Section "Install"
   SetOutPath "$INSTDIR"
-  File "target\release\atelier-core.exe"
+  File "target\release\Atelier.exe"
 
   WriteRegStr HKCU "Software\Atelier" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Atelier" "$INSTDIR\atelier-core.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Atelier" "$INSTDIR\Atelier.exe"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Atelier" "DisplayName" "Atelier"
@@ -35,7 +37,7 @@ Section "Uninstall"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Atelier"
   DeleteRegKey HKCU "Software\Atelier"
 
-  Delete "$INSTDIR\atelier-core.exe"
+  Delete "$INSTDIR\Atelier.exe"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
 SectionEnd
