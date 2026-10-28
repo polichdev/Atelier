@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 description = "Taskbar morphing engine, DWM composition styles, and Explorer crash recovery for Atelier."
 
+[features]
+xaml-probe = []
+
 [dependencies]
 atelier-common.workspace = true
 windows = { workspace = true, features = [
@@ -17,3 +20,6 @@ windows = { workspace = true, features = [
 ] }
 thiserror.workspace = true
 tracing.workspace = true
+
+[build-dependencies]
+cc = "1"
