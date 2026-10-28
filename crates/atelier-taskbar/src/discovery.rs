@@ -17,6 +17,13 @@ pub fn ensure_interactive_desktop() {
 }
 
 pub fn find_primary_taskbar() -> Option<HWND> {
+    unsafe {
+        if let Ok(hwnd) = FindWindowW(w!("Shell_TrayWnd"), None) {
+            if !hwnd.0.is_null() {
+                return Some(hwnd);
+            }
+        }
+    }
     ensure_interactive_desktop();
     unsafe {
         let hwnd = FindWindowW(w!("Shell_TrayWnd"), None).ok()?;
@@ -29,7 +36,6 @@ pub fn find_primary_taskbar() -> Option<HWND> {
 }
 
 pub fn find_secondary_taskbars() -> Vec<HWND> {
-    ensure_interactive_desktop();
     let mut taskbars = Vec::new();
     let mut current = HWND::default();
 
@@ -51,7 +57,6 @@ pub fn find_secondary_taskbars() -> Vec<HWND> {
 }
 
 pub fn find_all_taskbars() -> Vec<HWND> {
-    ensure_interactive_desktop();
     let mut all = Vec::new();
 
     if let Some(primary) = find_primary_taskbar() {
@@ -62,10 +67,29 @@ pub fn find_all_taskbars() -> Vec<HWND> {
     all.append(&mut secondaries);
 
     if all.is_empty() {
-        all = find_taskbars_by_enumeration();
+        ensure_interactive_desktop();
+        if let Some(primary) = find_primary_taskbar() {
+            all.push(primary);
+        }
+        all.append(&mut find_secondary_taskbars());
+        if all.is_empty() {
+            all = find_taskbars_by_enumeration();
+        }
     }
 
     all
+}
+
+pub fn has_xaml_background(hwnd: HWND) -> bool {
+    unsafe {
+        FindWindowExW(
+            hwnd,
+            HWND::default(),
+            w!("Windows.UI.Composition.DesktopWindowContentBridge"),
+            None,
+        )
+        .is_ok_and(|child| !child.0.is_null())
+    }
 }
 
 fn find_taskbars_by_enumeration() -> Vec<HWND> {

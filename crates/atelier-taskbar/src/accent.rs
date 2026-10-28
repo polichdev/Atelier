@@ -87,8 +87,9 @@ pub fn set_taskbar_accent_policy(hwnd: HWND, policy: AccentPolicy) -> Result<()>
         }
         Ok(())
     } else {
-        Err(AtelierError::Platform(
-            "SetWindowCompositionAttribute call returned FALSE".to_string(),
-        ))
+        Err(AtelierError::Platform(format!(
+            "SetWindowCompositionAttribute returned FALSE: {}",
+            std::io::Error::last_os_error()
+        )))
     }
 }
