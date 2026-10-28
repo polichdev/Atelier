@@ -7,6 +7,10 @@ fn test_taskbar_manager_lifecycle() {
         style: TaskbarStyle::Clear,
         floating_dock: false,
         floating_margin: 8,
+        corner_radius: 12,
+        vertical_gap: 4,
+        hide_top_border: true,
+                appearance: Default::default(),
     };
 
     let manager = TaskbarManager::new(config);
@@ -39,8 +43,9 @@ fn test_floating_dock_bounds_constraint() {
     let margin = 12;
 
     let dock_width = width - (margin * 2);
-    let dock_height = height - (margin * 2);
+    let elevation = 4;
+    let dock_height = height - elevation;
 
     assert_eq!(dock_width, 1896);
-    assert_eq!(dock_height, 24);
+    assert_eq!(dock_height, 44);
 }
