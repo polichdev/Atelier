@@ -23,7 +23,7 @@ fn main() {
             "/MT",
             "/O2",
             "/EHsc",
-            "/std:c++17",
+            "/std:c++20",
             "/DUNICODE",
             "/D_UNICODE",
         ])
@@ -49,7 +49,7 @@ fn main() {
                 "/MT",
                 "/O2",
                 "/EHsc",
-                "/std:c++17",
+                "/std:c++20",
                 "/DUNICODE",
                 "/D_UNICODE",
             ])

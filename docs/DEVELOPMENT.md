@@ -2,7 +2,7 @@
 
 ## Setup
 
-Use Windows 10/11 with a stable Rust MSVC toolchain, Visual C++ build tools, a Windows SDK and WebView2 Runtime. The taskbar build script invokes the C++ compiler for the XAML bridge. Node.js and Playwright are required for the browser tests; they are not required to load Studio's checked-in web assets through Cargo.
+Use Windows 10/11 with a stable Rust MSVC toolchain, Visual C++ build tools with C++20 support, a Windows SDK and WebView2 Runtime. The taskbar build script invokes the C++ compiler for the XAML bridge. Node.js and Playwright are required for the browser tests; they are not required to load Studio's checked-in web assets through Cargo.
 
 ```powershell
 cargo check --workspace
