@@ -17,8 +17,9 @@
         "minWidth": 640,
         "minHeight": 500,
         "resizable": true,
-        "decorations": true,
-        "transparent": false
+        "decorations": false,
+        "transparent": true,
+        "windowEffects": { "effects": ["micaDark"] }
       }
     ],
     "security": {
