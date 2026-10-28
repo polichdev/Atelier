@@ -1,53 +1,77 @@
-# Atelier 🎨
+# Atelier
 
-> Ultra-lightweight, hardware-accelerated Windows 10/11 customization suite and aesthetic workspace engine.
+[![Rust](https://img.shields.io/badge/Rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
+[![Tauri](https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri&logoColor=white)](https://v2.tauri.app/)
+[![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D7?logo=windows)](docs/COMPATIBILITY.md)
+[![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue)](#license)
 
-Atelier is a Windows 10/11 personalization project built with Rust and Tauri v2. Taskbar styling is connected to the Studio; wallpaper, audio, and widget controls are in progress.
+Atelier is a Windows desktop customization project built with Rust and Tauri v2. Its Studio can customize the Explorer taskbar and provide an optional, separate macOS-style dock. Wallpaper, audio and widget subsystems exist in the workspace, but their Studio controls are still in development.
 
----
+## Features
 
-## 📦 Workspace Layout
+- **Windows Taskbar:** configure materials, floating geometry and presets. On supported Windows 11 XAML taskbars, adjust app button and icon appearance.
+- **macOS Taskbar:** a separate dock for pinned shortcuts and running windows, with display and edge selection, sizing, layouts, indicators and auto-hide. Enabling it hides the native Windows taskbar, including the notification area.
+- **Recovery:** the dock uses a helper process before hiding Explorer windows; native taskbar positioning has a separate guardian. See [Failure Modes & Recovery](docs/FAILURES_AND_RECOVERY.md).
+- **Planned Studio controls:** wallpaper playback, audio visualization and widgets. Their presence in the workspace does not mean their complete user-facing flows are implemented.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    Studio["Studio UI · WebView2"] <-->|"Tauri commands and events"| App["atelier-ui · Rust"]
+    App --> Taskbar["atelier-taskbar"]
+    Taskbar --> Explorer["Explorer taskbar"]
+    Taskbar --> Bridge["C++ XAML bridge"]
+    Bridge --> Explorer
+    App --> Dock["Dock window and state"]
+    Dock --> Explorer
+    Dock --> Apps["Windows apps and shortcuts"]
+    App --> Other["Wallpaper, audio and widget modules"]
+    Dock --> Guardian["Recovery helper"]
 ```
-atelier/
-├── crates/
-│   ├── atelier-common/     # Shared types, error definitions, and config models
-│   ├── atelier-core/       # Central native daemon, state engine & Win32 event loop
-│   ├── atelier-taskbar/    # Taskbar morphing (Clear, Acrylic, Mica, Floating Island)
-│   ├── atelier-wallpaper/  # Direct3D 11 live wallpaper engine & WorkerW injection
-│   ├── atelier-audio/      # WASAPI loopback capture & real-time FFT spectrum
-│   └── atelier-widget/     # Frameless click-through glass desktop widgets
-├── Cargo.toml              # Cargo workspace configuration
-└── README.md
+
+The Tauri application is the primary Studio entry point. The separate `atelier-core` binary has its own tray and initialization path and is not the Tauri IPC backend. Details: [Architecture](docs/ARCHITECTURE.md).
+
+## Documentation
+
+### Guides and architecture
+
+- [Architecture and data flow](docs/ARCHITECTURE.md)
+- [Repository structure](docs/STRUCTURE.md)
+- [Configuration and storage](docs/CONFIGURATION.md)
+- [Compatibility](docs/COMPATIBILITY.md)
+- [Failure modes and recovery](docs/FAILURES_AND_RECOVERY.md)
+- [Development and testing](docs/DEVELOPMENT.md)
+- [Security considerations](docs/SECURITY.md)
+- [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+
+### Crate references
+
+- [`atelier-common`](docs/crates/COMMON.md) · [`atelier-core`](docs/crates/CORE.md)
+- [`atelier-taskbar`](docs/crates/TASKBAR.md) · [`atelier-ui`](docs/crates/UI.md)
+- [`atelier-wallpaper`](docs/crates/WALLPAPER.md) · [`atelier-audio`](docs/crates/AUDIO.md) · [`atelier-widget`](docs/crates/WIDGET.md)
+
+## Build and run
+
+Prerequisites: Windows 10/11, a stable Rust MSVC toolchain, Visual C++ Build Tools with a Windows SDK, and WebView2 Runtime. The XAML bridge is compiled from C++ during the Cargo build. See [Compatibility](docs/COMPATIBILITY.md) for Windows-specific limitations.
+
+```powershell
+cargo check --workspace
+cargo run -p atelier-ui --bin Atelier
 ```
 
-## Desktop Studio
+For a development copy that does not lock `target\debug\Atelier.exe`, run `scripts\run-dev.cmd`. It stops matching Atelier development processes before rebuilding; see [Development](docs/DEVELOPMENT.md).
 
-The **Taskbar** tab styles the real Explorer taskbar. Its native Windows 11 XAML controls adjust app icon size, button width, button corners, inactive opacity, running indicators, and hover scale. The native properties are preserved before modification and restored on reset or controller exit. Desktop Dock settings appear in a collapsible section below those controls. Older saved dock configurations require an explicit opt-in before that additional overlay can start again.
+## Tests
 
+```powershell
+cargo test -p atelier-common
+cargo test -p atelier-ui --lib
+cargo check --workspace
+```
 
-Atelier includes an independent **Desktop Dock**, enabled from the Taskbar tab. The dock launches pinned Windows shortcuts and switches between real running desktop windows. It supports bottom/top/left/right placement, monitor selection, alignment, 20–96 px icons, spacing, padding, edge distance, tint, opacity, corners, hover magnification, running indicators, active highlights, inactive opacity, labels, a clock, and auto-hide with an edge reveal strip. The macOS, Compact, and Side dock buttons apply complete starting layouts.
+The repository also contains an isolated dock smoke test and Playwright UI tests. Some taskbar integration tests interact with the real Explorer taskbar; read [Development and testing](docs/DEVELOPMENT.md) before running them.
 
-Pinned shortcuts are imported on first enable. Right-click a dock icon to open a new instance, pin/unpin it, or open Studio. Drag pinned icons to reorder them, or use the arrows in Studio. The **Icon** button on a pinned app accepts a local image, converts it to a small PNG, and stores it with the dock settings; **Reset icon** restores the application icon. Dock settings are stored separately in `dock-settings.json` beside Studio's other settings. The Windows reset action disables and resets Desktop Dock as well as restoring native taskbar styling.
+## License
 
-Enabling Desktop Dock hides Explorer's taskbars. A separate recovery process is started and acknowledges readiness before any taskbar is hidden; it restores the original visible taskbar windows if Atelier is killed or crashes. Disabling the dock or quitting normally also restores them. Windows' notification area is not replicated in Desktop Dock, so disable the dock to access the native system tray. The custom dock does not alter Explorer's icon order, installed app icons, or the desktop work-area reservation.
-
-Desktop dock verification:
-
-- `cargo test -p atelier-ui --lib` checks configuration compatibility and placement, including scaling and negative monitor coordinates.
-- `powershell -File scripts/test-desktop-dock.ps1` builds and runs an isolated native smoke test. It exercises real Tauri IPC, all four positions, auto-hide, shortcut launch, native window activation, pinning/order persistence, reset, and crash recovery against fixture windows. It uses a fresh directory under `target/` and never hides or restyles Explorer.
-- `node --test scripts/tests/desktop-dock.test.cjs` tests the UI with Playwright. Set `NODE_PATH` if using a bundled Playwright install and `ATELIER_TEST_BROWSER=msedge` to use an installed Edge rather than Playwright's Chromium. Visual QA images are written under `target/dock-tests/`.
-
-For development, launch with `.\scripts\run-dev.cmd`. The script closes a previous Atelier development process, builds the app, copies it to `target\dev-run\Atelier.exe`, and runs that copy. This leaves Cargo's `target\debug\Atelier.exe` free for subsequent IDE builds while the Studio is open. Launching `target\debug\Atelier.exe` directly will lock that file again.
-
-For a portable setup or isolated testing, set `ATELIER_DATA_DIR` to a writable folder before launching Atelier. Settings will be stored there instead of `%APPDATA%\Atelier`.
-
-Run the Tauri application with `cargo run -p atelier-ui --bin Atelier`. It starts with the Windows taskbar appearance and applies a style only when selected in Studio. Changes are saved at `%APPDATA%\Atelier\settings.json` and reapplied if Explorer recreates the taskbar during the current session; saved styles are not applied automatically on the next launch. On Windows 11 builds with a XAML taskbar background, the native composition policies may not change the visible background; the Studio detects that layer and reports the limitation. The tray menu can reopen the Studio or restore the Windows appearance.
-
-Wallpaper, audio, and widget modules are present in the workspace, but their Studio controls are still being integrated. The Studio labels those sections accordingly instead of showing nonfunctional toggles. The separate `atelier-core` daemon currently opens the Studio HTML without Tauri IPC; use the Tauri application for functional controls.
-
----
-
-## 📜 License
-
-Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.
+The workspace declares `MIT OR Apache-2.0` in `Cargo.toml`. License text files are not currently included in the repository.
