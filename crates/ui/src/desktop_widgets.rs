@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
 const RESIZE_MARGIN: u32 = 18;
-const KINDS: [&str; 0] = [];
+const KINDS: [&str; 1] = ["clock"];
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WidgetConfig {
