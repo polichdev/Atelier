@@ -3,7 +3,17 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
 const RESIZE_MARGIN: u32 = 18;
-const KINDS: [&str; 8] = ["clock", "calendar", "system", "media", "battery", "notes", "weather", "photo"];
+const KINDS: [&str; 9] = [
+    "clock",
+    "calendar",
+    "system",
+    "media",
+    "battery",
+    "notes",
+    "weather",
+    "photo",
+    "countdown",
+];
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WidgetConfig {
@@ -509,3 +519,65 @@ pub fn widget_resize(
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn transparent_margin_preserves_content_bounds_at_scaled_dpi() {
+        let b = content_bounds(-120, 80, 795, 285, 1.25);
+        assert_eq!((b.x, b.y, b.width, b.height), (-97, 103, 750, 240));
+        assert_eq!(b.scale, 1.25);
+    }
+    #[test]
+    fn legacy_medium_widget_keeps_its_size() {
+        let mut c: WidgetConfig = serde_json::from_str(
+            r#"{"kind":"calendar","enabled":true,"size":"medium","x":100,"y":200}"#,
+        )
+        .unwrap();
+        normalize(&mut c).unwrap();
+        assert_eq!(
+            (c.width, c.height, c.x, c.y),
+            (328, 156, Some(100), Some(200))
+        );
+        assert!(c.enabled && c.show_month);
+    }
+    #[test]
+    fn new_widgets_and_image_limits_are_validated() {
+        for kind in ["weather", "photo", "countdown"] {
+            let mut config = WidgetConfig {
+                kind: kind.into(),
+                ..Default::default()
+            };
+            normalize(&mut config).unwrap();
+            assert!(!config.enabled);
+        }
+        let mut photo = WidgetConfig {
+            kind: "photo".into(),
+            photo: "data:text/html;base64,abcd".into(),
+            ..Default::default()
+        };
+        assert!(normalize(&mut photo).is_err());
+        photo.photo = "data:image/jpeg;base64,abcd".into();
+        assert!(normalize(&mut photo).is_ok());
+        photo.photo = "data:image/gif;base64,R0lGODlh".into();
+        assert!(normalize(&mut photo).is_ok());
+    }
+    #[test]
+    fn bounds_and_colors_are_validated() {
+        let mut c = WidgetConfig {
+            kind: "clock".into(),
+            width: 9999,
+            height: 1,
+            radius: 999,
+            opacity: 0,
+            ..Default::default()
+        };
+        normalize(&mut c).unwrap();
+        assert_eq!(
+            (c.width, c.height, c.radius, c.opacity),
+            (1200, 120, 80, 20)
+        );
+        c.background = "#xyzxyz".into();
+        assert!(normalize(&mut c).is_err());
+    }
+}
