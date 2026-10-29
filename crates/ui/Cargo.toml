@@ -48,3 +48,5 @@ windows = { workspace = true, features = [
 ] }
 crossbeam-channel.workspace = true
 png = "0.18"
+
+base64 = "0.23"

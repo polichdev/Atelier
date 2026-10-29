@@ -12,6 +12,10 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 mod desktop_dock;
+mod desktop_widgets;
+mod widget_gpu;
+mod widget_metrics;
+mod widget_photo;
 pub fn watchdog_args() -> bool {
     atelier_taskbar::position::guardian_args() || desktop_dock::watchdog_args()
 }
@@ -598,8 +602,13 @@ pub fn run() {
     };
 
     let _ = tauri::Builder::default()
+        .register_uri_scheme_protocol("widget-photo", |_ctx, request| {
+            widget_photo::response(request)
+        })
         .manage(state)
         .manage(desktop_dock::DockState::new())
+        .manage(desktop_widgets::Widgets::new())
+        .manage(widget_photo::PhotoUploads::default())
         .setup(|app| {
             let icon = Image::new(include_bytes!("../icons/icon.rgba"), 128, 128);
             if let Some(window) = app.get_webview_window("main") {
@@ -722,6 +731,14 @@ pub fn run() {
             builder = builder.icon(icon);
 
             let _tray = builder.build(app)?;
+            if !dock_test_mode() || std::env::var_os("ATELIER_WIDGET_TEST").is_some() {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = desktop_widgets::start(&handle) {
+                        tracing::error!(%error, "Could not start widgets");
+                    }
+                });
+            }
             if let Err(error) = desktop_dock::start(app.handle()) {
                 tracing::error!(%error, "Could not start desktop dock");
             }
@@ -738,6 +755,22 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            widget_photo::photo_upload_begin,
+            widget_photo::photo_upload_chunk,
+            widget_photo::photo_upload_finish,
+            desktop_widgets::get_widgets,
+            desktop_widgets::set_widget,
+            desktop_widgets::widget_stats,
+            desktop_widgets::widget_media,
+            desktop_widgets::widget_media_control,
+            desktop_widgets::widget_media_seek,
+            desktop_widgets::widget_battery,
+            desktop_widgets::widget_open_settings,
+            desktop_widgets::widget_resize_focus,
+            desktop_widgets::widget_bounds,
+            desktop_widgets::widget_resize,
+            desktop_widgets::widget_position,
+            desktop_widgets::widget_move,
             get_taskbar_config,
             get_taskbar_capabilities,
             set_taskbar_config,
@@ -761,6 +794,12 @@ pub fn run() {
             desktop_dock::dock_native_test_probe,
         ])
         .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(false) = event {
+                desktop_widgets::dismiss_resize(window);
+            }
+            if let tauri::WindowEvent::Moved(position) = event {
+                desktop_widgets::moved(window, position);
+            }
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 if window.label() != "main" {
                     return;
