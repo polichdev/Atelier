@@ -112,15 +112,18 @@ impl SpectrumAnalyzer {
 
         let energy = (bass * 0.5 + mid * 0.3 + treble * 0.2).min(1.0);
 
-        let step = HALF_SIZE / NUM_BINS;
+        let max_freq = (self.sample_rate * 0.5).min(16000.0).max(40.0);
+        let ratio = max_freq / 35.0;
         for b in 0..NUM_BINS {
-            let start = b * step;
-            let end = (start + step).min(HALF_SIZE);
-            let mut sum = 0.0;
-            for mag in magnitudes[start..end].iter() {
-                sum += mag;
-            }
-            let raw_val = (sum / (end - start).max(1) as f32 * 5.0).min(1.0);
+            let low = 35.0 * ratio.powf(b as f32 / NUM_BINS as f32);
+            let high = 35.0 * ratio.powf((b + 1) as f32 / NUM_BINS as f32);
+            let start = ((low / bin_width).floor() as usize).min(HALF_SIZE - 1);
+            let end = ((high / bin_width).ceil() as usize).clamp(start + 1, HALF_SIZE);
+            let peak = magnitudes[start..end]
+                .iter()
+                .copied()
+                .fold(0.0_f32, f32::max);
+            let raw_val = (peak * 5.0).min(1.0);
             self.smoothed_bins[b] = self.smoothed_bins[b] * self.smoothing_factor
                 + raw_val * (1.0 - self.smoothing_factor);
         }
@@ -186,5 +189,37 @@ fn compute_radix2_fft(real: &mut [f32; FFT_SIZE], imag: &mut [f32; FFT_SIZE]) {
             i += len;
         }
         len <<= 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn separates_bass_and_treble_and_stays_bounded() {
+        let tone = |hz: f32| {
+            (0..FFT_SIZE)
+                .map(|i| (2.0 * PI * hz * i as f32 / 48000.0).sin() * 0.5)
+                .collect::<Vec<_>>()
+        };
+        let bass = SpectrumAnalyzer::new(48000.0).process(&tone(187.5));
+        let treble = SpectrumAnalyzer::new(48000.0).process(&tone(6000.0));
+        assert!(bass.bass > bass.treble);
+        assert!(treble.treble > treble.bass);
+        assert!(bass
+            .bins
+            .iter()
+            .chain(treble.bins.iter())
+            .all(|v| (0.0..=1.0).contains(v)));
+        assert!(
+            bass.bins[..20].iter().copied().fold(0.0_f32, f32::max)
+                > bass.bins[45..].iter().copied().fold(0.0_f32, f32::max)
+        );
+    }
+    #[test]
+    fn silence_produces_zero_levels() {
+        let silence = SpectrumAnalyzer::new(48000.0).process(&[0.0; FFT_SIZE]);
+        assert_eq!(silence.energy, 0.0);
+        assert!(silence.bins.iter().all(|v| *v == 0.0));
     }
 }
