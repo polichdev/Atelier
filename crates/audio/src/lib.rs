@@ -11,26 +11,41 @@ use visualizer::{AudioPulseState, AudioVisualizer};
 pub struct AudioManager {
     capture: Option<WasapiCapture>,
     visualizer: Arc<Mutex<AudioVisualizer>>,
+    last_request: Option<std::time::Instant>,
 }
 
 impl AudioManager {
     pub fn new(base_tint: u32) -> Self {
         Self {
             capture: None,
+            last_request: None,
             visualizer: Arc::new(Mutex::new(AudioVisualizer::new(base_tint))),
         }
     }
 
     pub fn start(&mut self) -> Result<()> {
-        if self.capture.is_none() {
+        if !self.is_active() {
+            self.stop();
             let capture = WasapiCapture::start()?;
             self.capture = Some(capture);
         }
         Ok(())
     }
 
+    pub fn request_spectrum(&mut self) -> Result<SpectrumData> {
+        self.start()?;
+        self.last_request = Some(std::time::Instant::now());
+        Ok(self.spectrum())
+    }
+
+    pub fn stop_if_idle(&mut self, idle: std::time::Duration) {
+        if self.last_request.is_some_and(|last| last.elapsed() >= idle) {
+            self.stop();
+        }
+    }
+
     pub fn is_active(&self) -> bool {
-        self.capture.is_some()
+        self.capture.as_ref().is_some_and(WasapiCapture::is_active)
     }
 
     pub fn spectrum(&self) -> SpectrumData {
@@ -63,6 +78,7 @@ impl AudioManager {
     }
 
     pub fn stop(&mut self) {
+        self.last_request = None;
         if let Some(mut c) = self.capture.take() {
             c.stop();
         }
