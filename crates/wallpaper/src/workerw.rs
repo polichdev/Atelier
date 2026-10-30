@@ -4,20 +4,43 @@ use windows::Win32::Foundation::{BOOL, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, EnumWindows, FindWindowExW, FindWindowW,
-    GetSystemMetrics, RegisterClassW, SendMessageTimeoutW, SetParent, SMTO_NORMAL,
-    SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WNDCLASSW,
-    WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_VISIBLE,
+    GetShellWindow, GetSystemMetrics, GetWindowLongPtrW, RegisterClassW, SendMessageTimeoutW,
+    SetParent, GWL_EXSTYLE, SMTO_NORMAL, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_DESTROY, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    WS_EX_NOREDIRECTIONBITMAP, WS_VISIBLE,
 };
 
 pub fn acquire_workerw() -> Result<HWND> {
-    let progman = unsafe { FindWindowW(w!("Progman"), None) }
-        .map_err(|e| AtelierError::Platform(format!("Failed to find Progman window: {e}")))?;
+    let progman = unsafe {
+        FindWindowW(w!("Progman"), None)
+            .or_else(|_| FindWindowW(w!("Progman"), w!("Program Manager")))
+            .or_else(|_| {
+                let shell = GetShellWindow();
+                if shell.0.is_null() {
+                    Err(windows::core::Error::from_win32())
+                } else {
+                    Ok(shell)
+                }
+            })
+    }
+    .map_err(|e| AtelierError::Platform(format!("Failed to find Progman window: {e}")))?;
 
     if progman.0.is_null() {
         return Err(AtelierError::Platform("Progman handle is null".to_string()));
     }
 
     let mut result: usize = 0;
+    let _ = unsafe {
+        SendMessageTimeoutW(
+            progman,
+            0x052C,
+            WPARAM(0x0000000D),
+            LPARAM(1),
+            SMTO_NORMAL,
+            1000,
+            Some(&mut result),
+        )
+    };
     let _ = unsafe {
         SendMessageTimeoutW(
             progman,
@@ -30,6 +53,11 @@ pub fn acquire_workerw() -> Result<HWND> {
         )
     };
 
+    if unsafe { GetWindowLongPtrW(progman, GWL_EXSTYLE) } & WS_EX_NOREDIRECTIONBITMAP.0 as isize
+        != 0
+    {
+        return Ok(progman);
+    }
     let mut workerw_hwnd = HWND::default();
 
     unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -41,6 +69,14 @@ pub fn acquire_workerw() -> Result<HWND> {
             if !shelldll_hwnd.0.is_null() {
                 if let Ok(workerw) =
                     unsafe { FindWindowExW(HWND::default(), hwnd, w!("WorkerW"), None) }
+                {
+                    if !workerw.0.is_null() {
+                        *p_workerw = workerw;
+                        return BOOL(0);
+                    }
+                }
+                if let Ok(workerw) =
+                    unsafe { FindWindowExW(hwnd, HWND::default(), w!("WorkerW"), None) }
                 {
                     if !workerw.0.is_null() {
                         *p_workerw = workerw;
@@ -61,33 +97,12 @@ pub fn acquire_workerw() -> Result<HWND> {
     };
 
     if workerw_hwnd.0.is_null() {
-        workerw_hwnd = find_workerw_fallback()?;
+        return Err(AtelierError::Platform(
+            "Could not locate the desktop wallpaper layer".into(),
+        ));
     }
 
     Ok(workerw_hwnd)
-}
-
-fn find_workerw_fallback() -> Result<HWND> {
-    let mut current = HWND::default();
-    loop {
-        let hwnd = unsafe { FindWindowExW(HWND::default(), current, w!("WorkerW"), None).ok() };
-
-        match hwnd {
-            Some(h) if !h.0.is_null() => {
-                let shelldll =
-                    unsafe { FindWindowExW(h, HWND::default(), w!("SHELLDLL_DefView"), None).ok() };
-                if shelldll.is_none() || shelldll.unwrap().0.is_null() {
-                    return Ok(h);
-                }
-                current = h;
-            }
-            _ => break,
-        }
-    }
-
-    Err(AtelierError::Platform(
-        "Failed to locate WorkerW desktop layer".to_string(),
-    ))
 }
 
 pub fn create_wallpaper_host_window(workerw: HWND) -> Result<HWND> {
