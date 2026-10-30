@@ -1,14 +1,15 @@
 use windows::core::w;
-use windows::Win32::Foundation::RECT;
+use windows::Win32::Foundation::{POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    ClientToScreen, GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
 use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 use windows::Win32::UI::Shell::{
     SHQueryUserNotificationState, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, GetClassNameW, GetForegroundWindow, GetWindowRect,
+    FindWindowW, GetClassNameW, GetClientRect, GetForegroundWindow, GetWindowThreadProcessId,
+    IsIconic, IsWindowVisible,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +72,16 @@ pub fn is_fullscreen_window_active() -> bool {
     if foreground.0.is_null() {
         return false;
     }
+    let mut process_id = 0;
+    unsafe {
+        GetWindowThreadProcessId(foreground, Some(&mut process_id));
+    }
+    if process_id == std::process::id()
+        || !unsafe { IsWindowVisible(foreground) }.as_bool()
+        || unsafe { IsIconic(foreground) }.as_bool()
+    {
+        return false;
+    }
 
     let progman = unsafe { FindWindowW(w!("Progman"), None).unwrap_or_default() };
     let taskbar = unsafe { FindWindowW(w!("Shell_TrayWnd"), None).unwrap_or_default() };
@@ -88,9 +99,17 @@ pub fn is_fullscreen_window_active() -> bool {
     }
 
     let mut window_rect = RECT::default();
-    if unsafe { GetWindowRect(foreground, &mut window_rect) }.is_err() {
+    if unsafe { GetClientRect(foreground, &mut window_rect) }.is_err() {
         return false;
     }
+    let mut origin = POINT::default();
+    if !unsafe { ClientToScreen(foreground, &mut origin) }.as_bool() {
+        return false;
+    }
+    window_rect.right += origin.x;
+    window_rect.bottom += origin.y;
+    window_rect.left = origin.x;
+    window_rect.top = origin.y;
 
     let monitor = unsafe { MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST) };
     if monitor.0.is_null() {
@@ -106,9 +125,41 @@ pub fn is_fullscreen_window_active() -> bool {
         return false;
     }
 
-    let m_rect = monitor_info.rcMonitor;
+    covers_monitor(window_rect, monitor_info.rcMonitor)
+}
+
+fn covers_monitor(window_rect: RECT, m_rect: RECT) -> bool {
     window_rect.left <= m_rect.left
         && window_rect.top <= m_rect.top
         && window_rect.right >= m_rect.right
         && window_rect.bottom >= m_rect.bottom
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn maximized_client_with_taskbar_is_not_fullscreen() {
+        let monitor = RECT {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        };
+        assert!(!covers_monitor(
+            RECT {
+                bottom: 1040,
+                ..monitor
+            },
+            monitor
+        ));
+        assert!(covers_monitor(monitor, monitor));
+        let left_monitor = RECT {
+            left: -1920,
+            right: 0,
+            ..monitor
+        };
+        assert!(covers_monitor(left_monitor, left_monitor));
+        assert!(!covers_monitor(monitor, left_monitor));
+    }
 }
