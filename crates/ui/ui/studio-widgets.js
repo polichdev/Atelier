@@ -7,7 +7,7 @@
   function field(parent,label,input){const wrapper=document.createElement('label');wrapper.className='widget-field';const span=document.createElement('span');span.textContent=label;wrapper.append(span,input);parent.append(wrapper)}
   function number(value,min,max){const e=document.createElement('input');e.type='number';e.min=min;e.max=max;e.value=value;return e}
   function save(c){clearTimeout(timers[c.kind]);timers[c.kind]=setTimeout(()=>{const copy=structuredClone(c);status.textContent='Saving…';pending=pending.catch(()=>{}).then(()=>invoke('set_widget',{config:copy})).then(()=>{status.textContent='';}).catch(e=>{status.textContent='Could not update widget: '+String(e)});},180)}
-  function build(){list.replaceChildren();for(const c of configs){
+  function build(){list.replaceChildren();for(const c of configs.filter(c=>c.kind!=='audio')){
     const row=document.createElement('article');row.className='widget-option';row.dataset.kind=c.kind;
     const top=document.createElement('div');top.className='widget-top';
     const preview=document.createElement('div');preview.className='widget-preview';const frame=document.createElement('iframe');frame.title=names[c.kind]+' preview';frame.tabIndex=-1;preview.append(frame);
@@ -39,6 +39,6 @@
   }}
   async function init(){try{configs=await invoke('get_widgets');build()}catch(e){status.textContent='Could not load widgets: '+String(e)}}
   window.__TAURI__?.event?.listen('widget-geometry',event=>{const updated=event.payload,c=configs.find(item=>item.kind===updated.kind);if(!c)return;Object.assign(c,{width:updated.width,height:updated.height,x:updated.x,y:updated.y});const row=list.querySelector('[data-kind="'+updated.kind+'"]');for(const key of ['width','height']){const input=row?.querySelector('[data-field="'+key+'"]');if(input&&document.activeElement!==input)input.value=c[key]}previewUpdates[c.kind]?.()});
-  window.__TAURI__?.event?.listen('widget-open-settings',event=>{document.querySelector('[data-tab="widgets"]').click();opened.add(event.payload);build();const row=list.querySelector(`[data-kind="${event.payload}"]`);row?.scrollIntoView({block:'nearest'});});
+  window.__TAURI__?.event?.listen('widget-open-settings',event=>{if(event.payload==='audio'){document.querySelector('[data-tab="audio"]').click();return}document.querySelector('[data-tab="widgets"]').click();opened.add(event.payload);build();const row=list.querySelector(`[data-kind="${event.payload}"]`);row?.scrollIntoView({block:'nearest'});});
   if(invoke)init();else status.textContent='Launch Atelier to use desktop widgets.';
 })();
