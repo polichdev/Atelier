@@ -343,7 +343,7 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 .widget-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}.widget-option{display:flex;gap:14px;align-items:center;padding:14px;border:1px solid var(--border-strong);background:var(--surface);border-radius:14px;min-width:0}.widget-preview{width:110px;height:110px;flex:none;overflow:hidden;border-radius:15px;background:#292b34}.widget-preview iframe{height:156px;border:0;transform:scale(.705);transform-origin:top left;pointer-events:none}.widget-details{min-width:0;flex:1}.widget-details strong{font-size:14px}.widget-details p{font-size:11px;line-height:1.4;color:var(--muted);margin:4px 0 12px}.widget-controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.widget-controls select{background:#262932;border:1px solid var(--border-strong);border-radius:6px;padding:4px 7px}.widget-toggle{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer}.widget-toggle input{accent-color:#d6d1c7}
 .widget-option{display:block}.widget-top{display:flex;gap:14px;align-items:center}.widget-preview iframe{pointer-events:none;transform-origin:top left}.widget-settings{border-top:1px solid var(--border-strong);margin-top:14px;padding-top:10px}.widget-settings summary{cursor:pointer;color:var(--warm);font-size:12px}.widget-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin-top:12px}.widget-field{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--muted)}.widget-field input[type=number]{width:62px;padding:4px;background:var(--surface3);border:1px solid var(--border-strong);border-radius:5px}.widget-field input[type=color]{width:37px;height:27px;border:0;background:none;padding:0}.widget-field .switch,.widget-toggle .switch{flex:none;accent-color:auto}.widget-note-field{display:block;margin-top:12px;font-size:11px;color:var(--muted)}.widget-note-field textarea{display:block;width:100%;height:85px;resize:vertical;margin-top:5px;padding:8px;background:var(--surface3);border:1px solid var(--border-strong);border-radius:6px}.widget-help{margin-top:10px;font-size:11px;color:var(--muted)}.widget-field input[type=text],.widget-field input[type=date]{min-width:0;width:120px;padding:4px;background:var(--surface3);border:1px solid var(--border-strong);border-radius:5px}.widget-note-field input[type=file]{display:block;max-width:100%;font-size:11px}.widget-note-field button{margin-top:8px;color:var(--warm);font-size:11px}
-</style></head>
+</style><link rel="stylesheet" href="studio-wallpaper.css"></head>
 <body>
 <div class="window-frame">
   <header class="titlebar">
@@ -569,22 +569,44 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
         </section>
 
         <section class="tab" id="wallpaper">
-          <div class="coming-section">
-            <div class="coming-label">Coming next</div>
-            <div class="coming-title">Live wallpapers</div>
-            <p class="coming-body">The wallpaper engine is in the project. File selection, playback, and pause rules will appear here once connected to the app.</p>
-            <div class="feature-grid">
-              <div class="feature-card">
-                <h3>Video and effects</h3>
-                <p>Library and playback modes.</p>
-                <span class="feature-tag">In development</span>
+          <div class="wallpaper-layout" id="wallpaper-layout">
+            <div class="wallpaper-browser">
+              <div class="wallpaper-controls">
+                <header class="wallpaper-head"><div><h2>Wallpapers</h2></div><div class="wallpaper-head-actions"><div id="workshop-actions" class="workshop-actions" hidden><button id="workshop-browse" class="wallpaper-primary" type="button">Browse Workshop</button><button id="workshop-refresh" class="wallpaper-primary" type="button">Refresh downloads</button></div><label class="wallpaper-import">Import wallpaper<input id="wallpaper-import" type="file" accept="video/mp4,video/webm,.mp4,.webm"></label></div></header>
+                <div class="wallpaper-tabs" role="tablist" aria-label="Wallpaper library"><button type="button" class="active" data-wallpaper-tab="library" role="tab" aria-selected="true">My wallpapers</button><button type="button" data-wallpaper-tab="workshop" role="tab" aria-selected="false" tabindex="-1">Workshop</button><button type="button" data-wallpaper-tab="settings" role="tab" aria-selected="false" tabindex="-1">Settings</button></div>
+                <div class="wallpaper-toolbar"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input id="wallpaper-search" type="search" placeholder="Search your wallpapers" aria-label="Search wallpapers"></div>
               </div>
-              <div class="feature-card">
-                <h3>Power saving</h3>
-                <p>Pause during fullscreen apps.</p>
-                <span class="feature-tag">In development</span>
+
+              <div id="wallpaper-performance" class="wallpaper-performance" hidden>
+                <div class="performance-columns">
+                  <section class="performance-section"><h4>Playback</h4>
+                    <label class="performance-row"><span>Another application is focused</span><select id="performance-focused" aria-label="Another application is focused"></select></label>
+                    <label class="performance-row"><span>Another application is maximized</span><select id="performance-maximized" aria-label="Another application is maximized"></select></label>
+                    <label class="performance-row"><span>Another application is fullscreen</span><select id="performance-fullscreen" aria-label="Another application is fullscreen"></select></label>
+                    <label class="performance-row"><span>Another application plays audio</span><select id="performance-other-audio" aria-label="Another application plays audio"></select></label>
+                    <label class="performance-row"><span>Running on battery</span><select id="performance-battery" aria-label="Running on battery"></select></label>
+                    <details class="performance-rules"><summary>Application rules <span id="performance-rule-count"></span></summary><p>Rules apply to the foreground application and override the window policies above.</p><div id="performance-rules-list"></div><button type="button" id="performance-rule-add" class="wallpaper-secondary">＋ Add application</button></details>
+                  </section>
+                  <section class="performance-section"><h4>Quality</h4>
+                    <div class="performance-row"><span>Preset</span><div class="performance-presets" role="group" aria-label="Quality preset"><button type="button" data-performance-preset="low">Low</button><button type="button" data-performance-preset="medium">Medium</button><button type="button" data-performance-preset="high">High</button></div></div>
+                    <label class="performance-row"><span>Anti-aliasing</span><select id="performance-antialiasing"><option value="off">Off</option><option value="fxaa">FXAA</option></select></label>
+                    <label class="performance-row"><span>Layer effects</span><select id="performance-effects"><option value="on">On</option><option value="off">Off</option></select></label>
+                    <label class="performance-row"><span>Render resolution</span><select id="performance-resolution"><option value="1">Full resolution</option><option value="0.75">75%</option><option value="0.5">50%</option><option value="0.25">25%</option></select></label>
+                    <label class="scene-range performance-fps"><span class="scene-range-head"><span>Scene frame rate</span><output id="performance-fps-value">30 FPS</output></span><input id="performance-fps" type="range" min="10" max="144" step="1" value="30"></label>
+                    <p class="performance-help">Quality controls apply to scenes. Videos keep their original resolution and frame rate.</p>
+                  </section>
+                </div><div class="performance-footer"><button type="button" id="performance-reset" class="wallpaper-primary">Reset settings</button></div><p id="performance-save-status" class="performance-save-status" role="status" aria-live="polite"></p>
               </div>
+              <div class="wallpaper-results"><div id="wallpaper-grid-library" class="wallpaper-grid"></div><div id="wallpaper-grid-workshop" class="wallpaper-grid" hidden></div><div id="wallpaper-empty" class="wallpaper-empty" hidden></div><div class="wallpaper-more" id="wallpaper-more" hidden><button type="button" id="wallpaper-more-button" class="wallpaper-secondary">Load more</button></div></div>
+              <div id="wallpaper-notice" class="wallpaper-notice" role="status" aria-live="polite" hidden></div>
             </div>
+            <aside id="wallpaper-detail" class="wallpaper-detail" aria-label="Selected wallpaper settings" aria-hidden="true" inert><div id="wallpaper-detail-content" hidden>
+              <div class="wallpaper-detail-head"><span>WALLPAPER</span><button type="button" id="wallpaper-detail-close" aria-label="Close wallpaper settings">×</button></div>
+              <div id="wallpaper-detail-preview" class="wallpaper-preview wallpaper-detail-preview"></div>
+              <div class="wallpaper-detail-info"><p id="wallpaper-detail-meta" class="wallpaper-detail-meta"></p><h3 id="wallpaper-detail-title"></h3></div>
+              <div class="wallpaper-detail-actions"><button id="workshop-open" class="wallpaper-primary" type="button" hidden>Import video to library</button><button id="workshop-client" class="wallpaper-secondary" type="button" hidden>Open in Steam App</button><button id="workshop-page" class="wallpaper-secondary" type="button" hidden>View Workshop page</button><button id="wallpaper-apply" class="wallpaper-primary" type="button">Apply</button><button id="wallpaper-stop" class="wallpaper-secondary" type="button">Stop wallpaper</button><button id="wallpaper-remove" class="wallpaper-secondary" type="button">Remove from library</button></div>
+              <p id="workshop-detail" class="workshop-detail" hidden></p><div id="wallpaper-scene-settings" class="scene-settings" hidden></div><div id="wallpaper-options" class="wallpaper-options"><div class="card-title">Settings</div><div class="wallpaper-fields"><label>Scaling<select id="wallpaper-fit"><option value="cover">Fill screen</option><option value="contain">Fit to screen</option><option value="stretch">Stretch</option></select></label><label>Volume<input id="wallpaper-volume" type="range" min="0" max="100"></label><label>Mute<input id="wallpaper-mute" type="checkbox" class="switch"></label><label>Pause<input id="wallpaper-paused" type="checkbox" class="switch"></label><label>Pause in fullscreen<input id="wallpaper-fullscreen" type="checkbox" class="switch"></label><label>Pause on battery<input id="wallpaper-battery" type="checkbox" class="switch"></label></div></div>
+            </div></aside>
           </div>
         </section>
 
@@ -1047,6 +1069,8 @@ all('[data-tab]').forEach(b=>{
   b.addEventListener('click',()=>{
   all('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));
   all('.tab').forEach(x=>x.classList.toggle('active',x.id===b.dataset.tab));
+  document.querySelector('.scroll-area').classList.toggle('wallpaper-mode',b.dataset.tab==='wallpaper');
+  document.querySelector('.main-col').classList.toggle('wallpaper-shell',b.dataset.tab==='wallpaper');
   });
 });
 
@@ -1067,4 +1091,4 @@ all('[data-tab]').forEach(b=>{
     toast('Could not read taskbar state: '+e,true);
   }
 })();
-</script><script src="studio-dock.js"></script><script src="studio-widgets.js"></script></body></html>
+</script><script src="scene-properties.js"></script><script src="studio-scene-settings.js"></script><script src="studio-wallpaper-settings.js"></script><script src="studio-wallpaper.js"></script><script src="studio-dock.js"></script><script src="studio-widgets.js"></script></body></html>
