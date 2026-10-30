@@ -86,7 +86,7 @@
   $('wallpaper-stop').hidden=!active;
   $('wallpaper-remove').hidden=!saved;
   $('wallpaper-options').hidden=!saved;
-  $('wallpaper-fit').value=options.fit;$('wallpaper-volume').value=options.volume;$('wallpaper-mute').checked=options.mute;$('wallpaper-paused').checked=options.paused;$('wallpaper-fullscreen').checked=options.pause_fullscreen;$('wallpaper-battery').checked=options.pause_battery;
+  $('wallpaper-fit').value=options.fit;$('wallpaper-volume').value=options.volume;$('wallpaper-mute').checked=options.mute;$('wallpaper-paused').checked=options.paused;$('wallpaper-fullscreen').checked=options.pause_fullscreen;$('wallpaper-battery').checked=options.pause_battery;const audio=options.audio||{pulse:false,glow:false,pulse_strength:40,glow_strength:40};$('wallpaper-audio-pulse').checked=audio.pulse;$('wallpaper-audio-glow').checked=audio.glow;$('wallpaper-audio-pulse-strength').value=audio.pulse_strength;$('wallpaper-audio-glow-strength').value=audio.glow_strength;
  }
  function importWorkshop(id){const item=localWorkshopItems.find(w=>w.id===id);return invoke(item?.kind==='scene'||item?.local_type==='scene'?'workshop_import_scene':'workshop_import_video',{id})}
  async function scanWorkshop(force=false){if(!invoke)return;if(scanPromise)return scanPromise;if(!force&&workshopLoaded&&Date.now()-lastScan<15000)return true;scanPromise=(async()=>{try{localWorkshopItems=await invoke('workshop_list_local');lastScan=Date.now();workshopLoaded=true;return true}catch(e){console.warn('Workshop scan error:',e);workshopLoaded=true;message('Could not scan Steam wallpapers.',true);return false}finally{scanPromise=null}})();return scanPromise}
@@ -102,6 +102,10 @@
  $('workshop-open').onclick=()=>{const all=localWorkshopItems.map(w=>({id:'steam:'+w.id,steam:w}));const item=all.find(i=>i.id===selected);if(!item?.steam?.id)return;const id=item.steam.id;act(async()=>{const imported=await importWorkshop(id);tab='library';selected=imported.id;paintTabs();message(`“${imported.title}” imported into your library`)})};
  $('workshop-client').onclick=()=>{const all=localWorkshopItems.map(w=>({id:'steam:'+w.id,steam:w}));const item=all.find(i=>i.id===selected);if(item?.steam?.id)act(()=>invoke('workshop_open_client',{id:item.steam.id}))};
  $('workshop-page').onclick=()=>{const all=localWorkshopItems.map(w=>({id:'steam:'+w.id,steam:w}));const item=all.find(i=>i.id===selected);if(item?.steam?.id)act(()=>invoke('workshop_open_page',{id:item.steam.id}))};
+ let audioSaveTimers={},audioSaveQueue=Promise.resolve();
+ function saveAudioOptions(){const id=selected;if(!id||id.startsWith('steam:'))return;const options={pulse:$('wallpaper-audio-pulse').checked,glow:$('wallpaper-audio-glow').checked,pulse_strength:Number($('wallpaper-audio-pulse-strength').value),glow_strength:Number($('wallpaper-audio-glow-strength').value)};clearTimeout(audioSaveTimers[id]);audioSaveTimers[id]=setTimeout(()=>{delete audioSaveTimers[id];audioSaveQueue=audioSaveQueue.catch(()=>{}).then(()=>invoke('wallpaper_audio_options',{id,options})).then(config=>{snapshot.config=config}).catch(error=>message(String(error),true))},100)}
+ for(const id of ['wallpaper-audio-pulse','wallpaper-audio-glow'])$(id).onchange=saveAudioOptions;
+ for(const id of ['wallpaper-audio-pulse-strength','wallpaper-audio-glow-strength'])$(id).oninput=saveAudioOptions;
  for(const id of ['wallpaper-fit','wallpaper-volume','wallpaper-mute','wallpaper-paused','wallpaper-fullscreen','wallpaper-battery'])$(id).onchange=()=>{const id=selected;if(id)act(()=>saveOptions(id))};
  $('wallpaper-apply').onclick=()=>{const id=selected;if(id){if(id.startsWith('steam:')){const steamId=id.replace('steam:','');act(async()=>{message('Importing and applying wallpaper to desktop…');const imported=await importWorkshop(steamId);await invoke('wallpaper_apply',{id:imported.id});tab='library';selected=imported.id;paintTabs();message(`“${imported.title}” applied to desktop!`);draw()});return}act(async()=>{message('Starting wallpaper…');await invoke('wallpaper_apply',{id})})}};
  $('wallpaper-stop').onclick=()=>act(async()=>{await invoke('wallpaper_apply',{id:null});message('Wallpaper removed from desktop')});
@@ -110,6 +114,7 @@
  window.__TAURI__?.event?.listen('wallpaper-status',event=>{if(snapshot){snapshot.playback=event.payload;if(snapshot.config.active===selected){$('wallpaper-apply').disabled=event.payload!=='error';$('wallpaper-apply').textContent=event.payload==='error'?'Retry':event.payload==='loading'?'Starting…':'Applied'}}if(event.payload==='error')message('The wallpaper could not play. Try importing it again or choose another wallpaper.',true)});
  let refreshing=false;async function refreshVisibleWorkshop(){if(tab!=='workshop'||busy||refreshing||document.hidden||!document.getElementById('wallpaper').classList.contains('active'))return;refreshing=true;try{const old=JSON.stringify(localWorkshopItems);await scanWorkshop();if(old!==JSON.stringify(localWorkshopItems))draw()}finally{refreshing=false}}
  window.addEventListener('focus',refreshVisibleWorkshop);setInterval(refreshVisibleWorkshop,10000);
+ window.__TAURI__?.event?.listen('wallpaper-audio-error',event=>{if(event.payload)message('Audio reactivity: '+String(event.payload),true)});
  window.__TAURI__?.event?.listen('wallpaper-error',event=>{if(event.payload)message(String(event.payload),true)});
  if(invoke)load().catch(e=>message(String(e),true));else message('Launch Atelier to manage live wallpapers.');
 })();

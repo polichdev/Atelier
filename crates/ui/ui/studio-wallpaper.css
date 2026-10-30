@@ -59,6 +59,7 @@
 .wallpaper-fields label{display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:12px;color:var(--muted);min-height:28px}
 .wallpaper-fields select{max-width:155px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface2);padding:7px 9px;font-size:11px;color:var(--text)}
 .wallpaper-fields input[type=range]{width:115px;accent-color:var(--warm)}
+.wallpaper-audio-settings{border-top:1px solid var(--border-strong);margin-top:24px;padding-top:20px}.wallpaper-audio-help{margin-top:16px;color:var(--muted);font-size:11px;line-height:1.5}
 .workshop-actions{display:flex;align-items:center;gap:8px}
 .workshop-detail{font-size:11px;line-height:1.7;color:var(--muted);margin-top:16px}
 .wallpaper-detail[hidden],.wallpaper-detail-actions [hidden],.wallpaper-options[hidden],.workshop-actions[hidden],#wallpaper-detail-content[hidden],.workshop-detail[hidden],.wallpaper-empty[hidden]{display:none}
