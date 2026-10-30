@@ -12,7 +12,16 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 mod desktop_dock;
+mod desktop_wallpaper;
+mod wallpaper_scene;
+mod scene_preview;
+mod scene_geometry;
+mod scene_properties;
+mod scene_effects;
+mod wallpaper_performance;
+mod desktop_background;
 mod desktop_widgets;
+mod steam_workshop;
 mod widget_gpu;
 mod widget_metrics;
 mod widget_photo;
@@ -23,6 +32,8 @@ pub fn watchdog_args() -> bool {
 #[path = "../tests/support/dock_fixture.rs"]
 mod dock_fixture;
 pub fn desktop_test_args() -> bool {
+    #[cfg(debug_assertions)]
+    if wallpaper_scene::test_args() { return true; }
     #[cfg(debug_assertions)]
     {
         dock_fixture::run()
@@ -185,22 +196,16 @@ fn hide_window(window: tauri::Window) {
 }
 
 #[tauri::command]
-fn get_system_status(state: tauri::State<AppState>) -> Result<serde_json::Value, String> {
+fn get_system_status(
+    state: tauri::State<AppState>,
+    wallpapers: tauri::State<desktop_wallpaper::Wallpapers>,
+) -> Result<serde_json::Value, String> {
     let audio_running = state.audio.lock().map(|a| a.is_active()).unwrap_or(false);
-    let wallpaper_active = state.wallpaper.is_some();
-    let is_fullscreen = state
-        .wallpaper
-        .as_ref()
-        .and_then(|w| w.occlusion_state().ok())
-        .map(|s| s != atelier_wallpaper::occlusion::OcclusionState::Active)
-        .unwrap_or(false);
-
-    Ok(serde_json::json!({
-        "audio_active": audio_running,
-        "wallpaper_active": wallpaper_active,
-        "fullscreen_occluded": is_fullscreen,
-        "widgets_active": true,
-    }))
+    let is_fullscreen = atelier_wallpaper::occlusion::is_fullscreen_window_active()
+        || atelier_wallpaper::occlusion::is_fullscreen_game_or_presentation();
+    Ok(
+        serde_json::json!({"audio_active":audio_running,"wallpaper_active":wallpapers.is_active(),"fullscreen_occluded":is_fullscreen,"widgets_active":true}),
+    )
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -581,11 +586,7 @@ pub fn run() {
         let _ = taskbar.start_recovery();
     }
 
-    let wallpaper = if dock_test_mode() {
-        None
-    } else {
-        WallpaperEngine::new(true).ok().map(Arc::new)
-    };
+    let wallpaper = None;
 
     let audio = Arc::new(Mutex::new(AudioManager::new(0x00FF8800)));
     if !dock_test_mode() {
@@ -602,6 +603,15 @@ pub fn run() {
     };
 
     let _ = tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol("wallpaper-media", |_ctx, request, responder| {
+            std::thread::spawn(move || responder.respond(desktop_wallpaper::response(request)));
+        })
+        .register_asynchronous_uri_scheme_protocol("workshop-media", |_ctx, request, responder| {
+            std::thread::spawn(move || responder.respond(steam_workshop::workshop_media_response(request)));
+        })
+        .register_asynchronous_uri_scheme_protocol("wallpaper-scene", |_ctx, request, responder| {
+            std::thread::spawn(move || responder.respond(wallpaper_scene::response(request)));
+        })
         .register_uri_scheme_protocol("widget-photo", |_ctx, request| {
             widget_photo::response(request)
         })
@@ -609,6 +619,7 @@ pub fn run() {
         .manage(desktop_dock::DockState::new())
         .manage(desktop_widgets::Widgets::new())
         .manage(widget_photo::PhotoUploads::default())
+        .manage(desktop_wallpaper::Wallpapers::new())
         .setup(|app| {
             let icon = Image::new(include_bytes!("../icons/icon.rgba"), 128, 128);
             if let Some(window) = app.get_webview_window("main") {
@@ -702,6 +713,7 @@ pub fn run() {
                         let _ = reset_defaults(state);
                     }
                     "quit" => {
+                        if let Err(error) = desktop_background::shutdown() { tracing::error!(%error, "Could not restore Windows background on exit"); }
                         app.state::<desktop_dock::DockState>().shutdown();
                         let state = app.state::<AppState>();
                         let _ = state.taskbar.reset_all();
@@ -739,6 +751,15 @@ pub fn run() {
                     }
                 });
             }
+            if !dock_test_mode() {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = desktop_wallpaper::start(&handle) {
+                        tracing::error!(%error,"Could not restore wallpaper");
+                        desktop_wallpaper::report_start_error(&handle,&error);
+                    }
+                });
+            }
             if let Err(error) = desktop_dock::start(app.handle()) {
                 tracing::error!(%error, "Could not start desktop dock");
             }
@@ -755,6 +776,28 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            steam_workshop::workshop_list_local,
+            steam_workshop::workshop_import_video,
+            steam_workshop::workshop_import_scene,
+            steam_workshop::workshop_open_page,
+            steam_workshop::workshop_open_client,
+            steam_workshop::workshop_open_browse,
+            desktop_wallpaper::wallpaper_snapshot,
+            desktop_wallpaper::wallpaper_import_begin,
+            desktop_wallpaper::wallpaper_import_chunk,
+            desktop_wallpaper::wallpaper_import_finish,
+            desktop_wallpaper::wallpaper_add_preset,
+            desktop_wallpaper::wallpaper_apply,
+            desktop_wallpaper::wallpaper_options,
+            desktop_wallpaper::wallpaper_scene_info,
+            desktop_wallpaper::wallpaper_scene_options,
+            desktop_wallpaper::wallpaper_performance_options,
+            desktop_wallpaper::wallpaper_playback_state,
+            desktop_wallpaper::wallpaper_remove,
+            desktop_wallpaper::wallpaper_should_pause,
+            desktop_wallpaper::wallpaper_pause_reason,
+            desktop_wallpaper::wallpaper_repair,
+            desktop_wallpaper::wallpaper_report,
             widget_photo::photo_upload_begin,
             widget_photo::photo_upload_chunk,
             widget_photo::photo_upload_finish,
@@ -804,6 +847,7 @@ pub fn run() {
                 if window.label() != "main" {
                     return;
                 }
+                if let Err(error) = desktop_background::shutdown() { tracing::error!(%error, "Could not restore Windows background on close"); }
                 window.state::<desktop_dock::DockState>().shutdown();
                 let state = window.state::<AppState>();
                 if !dock_test_mode() {
@@ -813,4 +857,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!());
+    if let Err(error) = desktop_background::shutdown() { tracing::error!(%error, "Could not restore Windows background after exit"); }
 }

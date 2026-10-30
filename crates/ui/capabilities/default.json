@@ -2,7 +2,12 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability for Atelier",
-  "windows": ["main", "desktop-dock", "widget-*"],
+  "windows": [
+    "main",
+    "desktop-dock",
+    "widget-*",
+    "desktop-wallpaper"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-minimize",
