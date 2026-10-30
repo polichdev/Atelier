@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body,#host,canvas{margin:0;width:100%;height:100%;overflow:hidden;display:block}</style></head><body><div id="host"></div><script src="scene-properties.js"></script><script src="scene-player.js"></script><script>
+(async()=>{
+ const invoke=window.__TAURI__.core.invoke;
+ let player;
+ try{
+  player=new AtelierScenePlayer(document.getElementById('host'));await player.load('1');
+  const gl=player.gl,width=player.canvas.width,height=player.canvas.height;
+  player.time=0;player.draw();const first=new Uint8Array(width*height*4);gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,first);
+  player.time=1.7;player.draw();const second=new Uint8Array(first.length);gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,second);
+  let colored=0,changed=0;for(let i=0;i<first.length;i+=4){if(first[i]+first[i+1]+first[i+2]>12)colored++;if(first[i]!==second[i]||first[i+1]!==second[i+1]||first[i+2]!==second[i+2])changed++}
+  const png=player.canvas.toDataURL('image/png'),schema=player.scene.properties||[],baseOptions={fit:'cover',mute:true,volume:50,scene:AtelierSceneProperties.defaults()};
+  const read=()=>{const bytes=new Uint8Array(first.length);gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,bytes);return bytes};
+  const difference=(a,b)=>{let count=0;for(let i=0;i<a.length;i+=4)if(a[i]!==b[i]||a[i+1]!==b[i+1]||a[i+2]!==b[i+2])count++;return count};
+  player.setOptions({...baseOptions,scene:{...baseOptions.scene,hue:70,saturation:.6,brightness:.8,contrast:1.2,tint:'1 0.8 0.6'}},true);
+  const gradingChanged=difference(second,read());
+  player.setOptions(baseOptions,true);const resetChanged=difference(second,read());
+  const propertyChecks=[];
+  for(const property of schema.filter(p=>p.supported&&p.type==='combo'&&p.options.length>1)){
+   const alternative=property.options.find(o=>o.value!==property.default)?.value;
+   player.setOptions({...baseOptions,scene:{...baseOptions.scene,properties:{[property.key]:alternative}}},true);
+   propertyChecks.push({key:property.key,changed:difference(second,read())});player.setOptions(baseOptions,true);
+  }
+  for(const property of schema.filter(p=>p.supported&&p.type==='bool')){player.setOptions({...baseOptions,scene:{...baseOptions.scene,properties:{[property.key]:!property.default}}},true);propertyChecks.push({key:property.key,changed:difference(second,read())});player.setOptions(baseOptions,true)}
+  const animated=player.layers.some(layer=>layer.effects.length),error=gl.getError();
+  const ok=colored>width*height*.1&&(!animated||changed>10)&&gradingChanged>100&&resetChanged===0&&propertyChecks.every(p=>p.changed>10)&&error===gl.NO_ERROR;
+  await invoke('scene_test_report',{report:{ok,width,height,layers:player.layers.length,effects:player.layers.reduce((sum,l)=>sum+l.effects.length,0),colored,changed,gradingChanged,resetChanged,propertyChecks,properties:schema.map(p=>({key:p.key,supported:p.supported})),glError:error,warnings:player.scene.warnings,png}});
+ }catch(error){await invoke('scene_test_report',{report:{ok:false,error:String(error),stack:error.stack}})}finally{player?.dispose()}
+})();
+</script></body></html>

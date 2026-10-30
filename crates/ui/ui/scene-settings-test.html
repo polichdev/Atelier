@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><style>:root{--warm:#e8e4dc;--text:#eee;--muted:#999;--border-strong:#38383c;--surface2:#202026}body{font:13px 'Segoe UI';background:#202020;color:#eee}#wallpaper-scene-settings{width:300px}</style><link rel="stylesheet" href="studio-wallpaper.css"></head><body>
+<div id="wallpaper-scene-settings" class="scene-settings"></div>
+<div id="scene-test-host" hidden></div><script src="scene-properties.js"></script><script src="scene-player.js"></script><script src="studio-scene-settings.js"></script><script src="studio-wallpaper-settings.js"></script><script>
+(async()=>{
+ const invoke=window.__TAURI__.core.invoke,check=(test,message)=>{if(!test)throw Error(message)};
+ try{
+  const info=await invoke('wallpaper_scene_info',{id:'1'});check(info.upgraded,'Legacy scene did not upgrade');check(info.properties.some(p=>p.supported),'Author settings missing after upgrade');
+  let snapshot=await invoke('wallpaper_snapshot');
+  let savedResolve;const saved=new Promise(resolve=>savedResolve=resolve);
+  window.AtelierSceneSettings.show(snapshot.config.items[0],snapshot.config.settings['1'],config=>savedResolve(config),error=>savedResolve({error}));
+  const ranges=document.querySelectorAll('#wallpaper-scene-settings input[type=range]');check(ranges.length>=5,'Scene sliders missing');
+  const speed=ranges[0];speed.value='1.75';speed.dispatchEvent(new Event('input',{bubbles:true}));
+  const config=await saved;check(!config.error,config.error);check(config.settings['1'].scene.speed===1.75,'Slider did not persist through the real command');
+  const options={...config.settings['1'].scene,hue:42,saturation:.7,properties:{animations:false,characterssize:'1'}};
+  await invoke('wallpaper_scene_options',{id:'1',options});
+  await invoke('wallpaper_options',{id:'1',fit:'cover',paused:false,mute:true,volume:28,pauseFullscreen:true,pauseBattery:false});
+  snapshot=await invoke('wallpaper_snapshot');const settings=snapshot.config.settings['1'];
+  check(settings.scene.speed===1.75&&settings.scene.hue===42,'General controls overwrote scene settings');
+  check(settings.scene.properties.animations===false&&settings.scene.properties.characterssize==='1','Author overrides did not persist');
+  const second=await invoke('wallpaper_scene_info',{id:'1'});check(!second.upgraded&&!second.legacy,'Upgrade repeated or remained incomplete');
+  const html=await(await fetch('index.html')).text(),template=new DOMParser().parseFromString(html,'text/html');
+  const performance=template.getElementById('wallpaper-performance');performance.hidden=false;document.body.append(performance);
+  let performanceResolve;const nextPerformance=action=>new Promise(resolve=>{performanceResolve=resolve;action()});
+  window.AtelierWallpaperSettings.show(snapshot.config.performance,config=>performanceResolve(config),error=>performanceResolve({error}));
+  const high=await nextPerformance(()=>document.querySelector('[data-performance-preset="high"]').click());check(!high.error,high.error);check(high.performance.fps===60&&high.performance.antialiasing,'Quality preset did not persist');
+  const player=new AtelierScenePlayer(document.getElementById('scene-test-host'));await player.load('1');player.time=1.7;
+  const base={...settings,scene:AtelierSceneProperties.defaults(),performance:{...high.performance,antialiasing:false}};
+  player.setOptions(base,true);const gl=player.gl,width=player.canvas.width,height=player.canvas.height,baseline=new Uint8Array(width*height*4);gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,baseline);
+  player.setOptions({...base,performance:high.performance},true);const smoothed=new Uint8Array(baseline.length);gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,smoothed);let antialiasingChanged=0;for(let i=0;i<baseline.length;i+=4)if(baseline[i]!==smoothed[i]||baseline[i+1]!==smoothed[i+1]||baseline[i+2]!==smoothed[i+2])antialiasingChanged++;
+  check(antialiasingChanged>100,'Anti-aliasing did not alter scene edges');
+  const half=await nextPerformance(()=>{const select=document.getElementById('performance-resolution');select.value='0.5';select.dispatchEvent(new Event('change',{bubbles:true}))});check(!half.error,half.error);player.setOptions({...base,performance:half.performance},true);check(player.canvas.width===Math.round(width*.5)&&player.canvas.height===Math.round(height*.5),'Resolution setting did not resize the renderer');
+  const policy=await nextPerformance(()=>{const select=document.getElementById('performance-fullscreen');select.value='continue';select.dispatchEvent(new Event('change',{bubbles:true}))});check(!policy.error,policy.error);check(policy.performance.fullscreen==='continue','Fullscreen policy did not persist');check(policy.settings['1'].scene.hue===42,'Performance changes overwrote scene preferences');
+  const glError=gl.getError();check(glError===0,'Quality change caused a GL error');player.dispose();
+  await invoke('scene_test_report',{report:{ok:true,upgraded:info.upgraded,properties:info.properties.length,speed:settings.scene.speed,hue:settings.scene.hue,volume:settings.volume,authorOverrides:settings.scene.properties,sliders:ranges.length,fps:high.performance.fps,resolution:half.performance.resolution,fullscreen:policy.performance.fullscreen,antialiasingChanged,glError}});
+ }catch(error){await invoke('scene_test_report',{report:{ok:false,error:String(error),stack:error.stack}})}
+})();
+</script></body></html>
