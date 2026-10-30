@@ -2,6 +2,7 @@ pub mod occlusion;
 pub mod model;
 pub mod package;
 pub mod renderer;
+pub mod texture;
 pub mod video;
 pub mod workerw;
 
