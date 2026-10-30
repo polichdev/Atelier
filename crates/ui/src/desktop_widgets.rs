@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
 const RESIZE_MARGIN: u32 = 18;
-const KINDS: [&str; 9] = [
+const KINDS: [&str; 10] = [
     "clock",
     "calendar",
     "system",
@@ -13,6 +13,7 @@ const KINDS: [&str; 9] = [
     "weather",
     "photo",
     "countdown",
+    "audio",
 ];
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -50,6 +51,16 @@ pub struct WidgetConfig {
     pub show_disk: bool,
     pub show_artwork: bool,
     pub show_forecast: bool,
+    pub visualizer_style: String,
+    pub sensitivity: u32,
+    pub smoothing: u32,
+    pub gradient: bool,
+    pub gradient_color: String,
+    pub visualizer_glow: u32,
+    pub bar_width: u32,
+    pub bar_count: u32,
+    pub hide_when_silent: bool,
+    pub pause_fullscreen: bool,
 }
 impl Default for WidgetConfig {
     fn default() -> Self {
@@ -87,6 +98,16 @@ impl Default for WidgetConfig {
             show_disk: false,
             show_artwork: true,
             show_forecast: true,
+            visualizer_style: "bars".into(),
+            sensitivity: 65,
+            smoothing: 65,
+            gradient: false,
+            gradient_color: "#8b5cf6".into(),
+            visualizer_glow: 0,
+            bar_width: 38,
+            bar_count: 32,
+            hide_when_silent: false,
+            pause_fullscreen: false,
         }
     }
 }
@@ -95,15 +116,27 @@ fn normalize(c: &mut WidgetConfig) -> Result<(), String> {
         return Err("Unknown widget".into());
     }
     if c.width == 0 {
-        c.width = if c.size == "medium" { 328 } else { 156 };
+        c.width = if c.size == "medium" || c.kind == "audio" {
+            328
+        } else {
+            156
+        };
     }
     c.width = c.width.clamp(140, 1200);
     c.height = c.height.clamp(120, 900);
     c.radius = c.radius.min(80);
-    c.opacity = c.opacity.clamp(20, 100);
+    c.opacity = c.opacity.clamp(if c.kind == "audio" { 0 } else { 20 }, 100);
+    c.visualizer_glow = c.visualizer_glow.min(100);
+    c.bar_width = c.bar_width.clamp(10, 100);
+    c.bar_count = c.bar_count.clamp(8, 64);
+    c.sensitivity = c.sensitivity.clamp(1, 200);
+    c.smoothing = c.smoothing.min(95);
+    if !["bars", "wave", "dots", "circle", "mirror"].contains(&c.visualizer_style.as_str()) {
+        return Err("Invalid visualizer style".into());
+    }
     if c.background.is_empty() {
         c.background = match c.kind.as_str() {
-            "clock" => "#20212b",
+            "clock" | "audio" => "#20212b",
             "media" => "#7651bb",
             "weather" => "#447cb7",
             "notes" => "#fff1a6",
@@ -112,14 +145,14 @@ fn normalize(c: &mut WidgetConfig) -> Result<(), String> {
         .into();
     }
     if c.foreground.is_empty() {
-        c.foreground = if ["clock", "media", "weather"].contains(&c.kind.as_str()) {
+        c.foreground = if ["clock", "media", "weather", "audio"].contains(&c.kind.as_str()) {
             "#ffffff"
         } else {
             "#202332"
         }
         .into();
     }
-    for color in [&c.background, &c.foreground] {
+    for color in [&c.background, &c.foreground, &c.gradient_color] {
         if color.len() != 7
             || !color.starts_with('#')
             || !color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)
@@ -281,19 +314,22 @@ pub async fn set_widget(
     mut config: WidgetConfig,
 ) -> Result<Vec<WidgetConfig>, String> {
     normalize(&mut config)?;
-    let mut configs = state.0.lock().map_err(|e| e.to_string())?;
-    let i = configs
-        .iter()
-        .position(|c| c.kind == config.kind)
-        .ok_or("Unknown widget")?;
-    config.x = configs[i].x;
-    config.y = configs[i].y;
-    let mut next = configs.clone();
-    next[i] = config;
-    persist(&next)?;
-    *configs = next.clone();
-    drop(configs);
+    let (next, i) = {
+        let mut configs = state.0.lock().map_err(|e| e.to_string())?;
+        let i = configs
+            .iter()
+            .position(|c| c.kind == config.kind)
+            .ok_or("Unknown widget")?;
+        config.x = configs[i].x;
+        config.y = configs[i].y;
+        let mut next = configs.clone();
+        next[i] = config;
+        persist(&next)?;
+        *configs = next.clone();
+        (next, i)
+    };
     apply(&app, &next[i], i)?;
+    let _ = app.emit_to("main", "widget-updated", &next[i]);
     Ok(next)
 }
 pub fn moved(window: &tauri::Window, p: &tauri::PhysicalPosition<i32>) {
@@ -323,6 +359,41 @@ pub fn widget_open_settings(app: tauri::AppHandle, kind: String) -> Result<(), S
     app.emit_to("main", "widget-open-settings", kind)
         .map_err(|e| e.to_string())
 }
+#[tauri::command]
+pub async fn audio_spectrum(
+    window: tauri::Window,
+    state: tauri::State<'_, super::AppState>,
+) -> Result<serde_json::Value, String> {
+    let label = window.label().to_string();
+    if label != "widget-audio" && label != "desktop-wallpaper" && label != "desktop-dock" {
+        return Err("Audio spectrum is unavailable to this window".into());
+    }
+    let audio = state.audio.clone();
+    let app = window.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut audio = audio.lock().map_err(|e| e.to_string())?;
+        let enabled = if label == "widget-audio" {
+            app.state::<Widgets>().0.lock().map_err(|e| e.to_string())?.iter().any(|c| c.kind == "audio" && c.enabled)
+        } else if label == "desktop-dock" { app.state::<super::desktop_dock::DockState>().audio_effects_enabled() } else { app.state::<super::desktop_wallpaper::Wallpapers>().audio_effects_enabled() };
+        if !enabled { return Err("Audio reactivity is disabled".into()); }
+        let s = audio.request_spectrum().map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({"bins":s.bins.as_slice(), "bass":s.bass, "mid":s.mid, "treble":s.treble}))
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn audio_widget_fullscreen(window: tauri::Window) -> Result<bool, String> {
+    if window.label() != "widget-audio" {
+        return Err("Only the audio widget can check fullscreen state".into());
+    }
+    tauri::async_runtime::spawn_blocking(|| {
+        atelier_wallpaper::occlusion::is_fullscreen_window_active()
+            || atelier_wallpaper::occlusion::is_fullscreen_game_or_presentation()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn widget_stats(
     state: tauri::State<'_, super::AppState>,
@@ -527,6 +598,38 @@ mod tests {
         let b = content_bounds(-120, 80, 795, 285, 1.25);
         assert_eq!((b.x, b.y, b.width, b.height), (-97, 103, 750, 240));
         assert_eq!(b.scale, 1.25);
+    }
+    #[test]
+    fn audio_widget_defaults_and_limits_are_validated() {
+        let mut c = WidgetConfig {
+            kind: "audio".into(),
+            ..Default::default()
+        };
+        normalize(&mut c).unwrap();
+        assert_eq!((c.width, c.height), (328, 156));
+        assert!(!c.enabled);
+        assert_eq!(c.visualizer_style, "bars");
+        c.sensitivity = 1000;
+        c.smoothing = 1000;
+        normalize(&mut c).unwrap();
+        assert_eq!((c.sensitivity, c.smoothing), (200, 95));
+        c.opacity = 0;
+        c.bar_count = 999;
+        c.bar_width = 0;
+        c.visualizer_glow = 120;
+        c.visualizer_style = "circle".into();
+        normalize(&mut c).unwrap();
+        assert_eq!(
+            (c.opacity, c.bar_count, c.bar_width, c.visualizer_glow),
+            (0, 64, 10, 100)
+        );
+        c.visualizer_style = "mirror".into();
+        assert!(normalize(&mut c).is_ok());
+        c.gradient_color = "not-a-color".into();
+        assert!(normalize(&mut c).is_err());
+        c.gradient_color = "#112233".into();
+        c.visualizer_style = "unknown".into();
+        assert!(normalize(&mut c).is_err());
     }
     #[test]
     fn legacy_medium_widget_keeps_its_size() {
