@@ -19,6 +19,53 @@ use windows::{
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
+pub struct DockAudioConfig {
+    pub enabled: bool,
+    pub color: String,
+    pub strength: u32,
+    pub shape: String,
+    pub shape_strength: u32,
+    pub sensitivity: u32,
+    pub smoothing: u32,
+    pub frequency: String,
+}
+impl Default for DockAudioConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            color: "#8b5cf6".into(),
+            strength: 45,
+            shape: "off".into(),
+            shape_strength: 40,
+            sensitivity: 100,
+            smoothing: 60,
+            frequency: "mix".into(),
+        }
+    }
+}
+impl DockAudioConfig {
+    fn validate(&mut self) -> Result<(), String> {
+        if self.color.len() != 7
+            || !self.color.starts_with('#')
+            || !self.color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)
+        {
+            return Err("Invalid audio glow color".into());
+        }
+        self.strength = self.strength.min(100);
+        self.shape_strength = self.shape_strength.min(100);
+        self.sensitivity = self.sensitivity.clamp(1, 200);
+        self.smoothing = self.smoothing.min(95);
+        if !["off", "breathe", "corners", "both"].contains(&self.shape.as_str())
+            || !["mix", "bass", "mid", "treble"].contains(&self.frequency.as_str())
+        {
+            return Err("Invalid dock audio effect".into());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct DockConfig {
     pub explicit_desktop_opt_in: bool,
     pub enabled: bool,
@@ -41,9 +88,21 @@ pub struct DockConfig {
     pub show_labels: bool,
     pub show_running: bool,
     pub show_clock: bool,
+    pub show_start: bool,
+    pub show_search: bool,
+    pub show_studio: bool,
+    pub show_tray: bool,
+    pub show_language: bool,
+    pub show_network: bool,
+    pub show_volume: bool,
+    pub launch_animation: bool,
+    pub maximize_on_open: bool,
+    pub maximized_bottom_gap: u32,
+    pub hidden_apps: Vec<Pin>,
     pub auto_hide: bool,
     pub hide_delay: u32,
     pub hide_windows_taskbar: bool,
+    pub audio: DockAudioConfig,
     pub pinned: Vec<Pin>,
     pub imported: bool,
 }
@@ -71,9 +130,21 @@ impl Default for DockConfig {
             show_labels: true,
             show_running: true,
             show_clock: false,
+            show_start: true,
+            show_search: true,
+            show_studio: true,
+            show_tray: false,
+            show_language: false,
+            show_network: false,
+            show_volume: false,
+            launch_animation: true,
+            maximize_on_open: true,
+            maximized_bottom_gap: 0,
+            hidden_apps: Vec::new(),
             auto_hide: false,
             hide_delay: 700,
             hide_windows_taskbar: false,
+            audio: DockAudioConfig::default(),
             pinned: Vec::new(),
             imported: false,
         }
@@ -87,7 +158,14 @@ pub struct Pin {
     pub icon: Option<String>,
 }
 impl DockConfig {
+    fn preserve_managed(&mut self, old: &Self) {
+        self.pinned = old.pinned.clone();
+        self.imported = old.imported;
+        self.audio = old.audio.clone();
+        self.hidden_apps = old.hidden_apps.clone();
+    }
     fn validate(&mut self) -> Result<(), String> {
+        self.audio.validate()?;
         if !["bottom", "top", "left", "right"].contains(&self.position.as_str())
             || !["start", "center", "end"].contains(&self.alignment.as_str())
             || !["original", "rounded", "monochrome"].contains(&self.icon_style.as_str())
@@ -107,12 +185,19 @@ impl DockConfig {
         self.spacing = self.spacing.min(24);
         self.padding = self.padding.clamp(4, 28);
         self.edge_gap = self.edge_gap.min(100);
+        self.maximized_bottom_gap = self.maximized_bottom_gap.min(200);
         self.radius = self.radius.min(48);
         self.opacity = self.opacity.clamp(10, 100);
         self.magnification = self.magnification.clamp(100, 180);
         self.inactive_opacity = self.inactive_opacity.clamp(20, 100);
         self.hide_delay = self.hide_delay.clamp(200, 3000);
         self.hide_windows_taskbar = self.enabled;
+        if self.hidden_apps.len() > 256 {
+            return Err("Too many hidden apps".into());
+        }
+        let mut hidden_seen = HashSet::new();
+        self.hidden_apps
+            .retain(|p| !p.path.is_empty() && hidden_seen.insert(key(&p.path)));
         if self.pinned.len() > 64 {
             return Err("A dock supports up to 64 pinned apps".into());
         }
@@ -144,9 +229,21 @@ pub struct DockState {
     icons: Mutex<HashMap<String, String>>,
     hidden: Mutex<Vec<isize>>,
     visible_size: Mutex<(f64, f64)>,
+    appbar_lease: Mutex<Option<AppbarLease>>,
+    language_target: Mutex<Option<(isize, u32)>>,
+    gap_appbar: Mutex<Option<(isize, usize, u32)>>,
+    fullscreen_hidden: AtomicBool,
     stopping: AtomicBool,
 }
 impl DockState {
+    pub fn audio_effects_enabled(&self) -> bool {
+        !self.fullscreen_hidden.load(Ordering::Relaxed)
+            && self
+                .config
+                .lock()
+                .map(|c| c.enabled && c.audio.enabled)
+                .unwrap_or(false)
+    }
     pub fn new() -> Self {
         let mut config = std::fs::read(path())
             .ok()
@@ -166,13 +263,37 @@ impl DockState {
             icons: Mutex::new(HashMap::new()),
             hidden: Mutex::new(Vec::new()),
             visible_size: Mutex::new((320., 110.)),
+            appbar_lease: Mutex::new(None),
+            language_target: Mutex::new(None),
+            gap_appbar: Mutex::new(None),
+            fullscreen_hidden: AtomicBool::new(false),
             stopping: AtomicBool::new(false),
         }
     }
     pub fn restore_taskbar(&self) {
+        self.remove_gap_appbar();
         if let Ok(mut hidden) = self.hidden.lock() {
             for handle in hidden.drain(..) {
                 show_taskbar(handle)
+            }
+        }
+        if let Ok(mut lease) = self.appbar_lease.lock() {
+            if let Some(lease) = lease.take() {
+                lease.restore();
+            }
+        }
+    }
+    fn remove_gap_appbar(&self) {
+        if let Ok(mut current) = self.gap_appbar.lock() {
+            if let Some((handle, _, _)) = current.take() {
+                let mut data = APPBARDATA {
+                    cbSize: std::mem::size_of::<APPBARDATA>() as u32,
+                    hWnd: hwnd(handle),
+                    ..Default::default()
+                };
+                unsafe {
+                    SHAppBarMessage(ABM_REMOVE, &mut data);
+                }
             }
         }
     }
@@ -198,6 +319,12 @@ impl DockState {
                     continue;
                 }
                 spawn_watchdog(handle)?;
+                if is_primary_taskbar(hwnd) {
+                    let mut lease = self.appbar_lease.lock().map_err(|e| e.to_string())?;
+                    if lease.is_none() {
+                        *lease = begin_appbar_autohide(hwnd)?;
+                    }
+                }
                 hidden.push(handle);
             }
             let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
@@ -214,6 +341,192 @@ fn key(s: &str) -> String {
 }
 fn hwnd(v: isize) -> HWND {
     HWND(v as *mut std::ffi::c_void)
+}
+fn is_primary_taskbar(handle: HWND) -> bool {
+    let mut class = [0u16; 80];
+    let n = unsafe { GetClassNameW(handle, &mut class) };
+    n > 0 && String::from_utf16_lossy(&class[..n as usize]) == "Shell_TrayWnd"
+}
+fn primary_taskbar() -> Option<HWND> {
+    atelier_taskbar::discovery::find_all_taskbars()
+        .into_iter()
+        .find(|handle| is_primary_taskbar(*handle))
+}
+fn appbar_state(hwnd: HWND) -> u32 {
+    let mut data = APPBARDATA {
+        cbSize: std::mem::size_of::<APPBARDATA>() as u32,
+        hWnd: hwnd,
+        ..Default::default()
+    };
+    unsafe { SHAppBarMessage(ABM_GETSTATE, &mut data) as u32 }
+}
+fn set_appbar_state(hwnd: HWND, state: u32) {
+    let mut data = APPBARDATA {
+        cbSize: std::mem::size_of::<APPBARDATA>() as u32,
+        hWnd: hwnd,
+        lParam: LPARAM(state as isize),
+        ..Default::default()
+    };
+    unsafe {
+        SHAppBarMessage(ABM_SETSTATE, &mut data);
+    }
+}
+fn should_restore_appbar(original: u32, applied: u32, observed: u32) -> bool {
+    original != applied && observed == applied
+}
+fn restore_appbar_if_owned(original: u32, applied: u32) {
+    if let Some(hwnd) = primary_taskbar() {
+        if should_restore_appbar(original, applied, appbar_state(hwnd)) {
+            set_appbar_state(hwnd, original);
+        }
+    }
+}
+struct AppbarLease {
+    original: u32,
+    applied: u32,
+    cancel: isize,
+}
+impl AppbarLease {
+    fn restore(self) {
+        restore_appbar_if_owned(self.original, self.applied);
+        let event = windows::Win32::Foundation::HANDLE(self.cancel as *mut _);
+        unsafe {
+            let _ = SetEvent(event);
+            let _ = windows::Win32::Foundation::CloseHandle(event);
+        }
+    }
+}
+fn begin_appbar_autohide(hwnd: HWND) -> Result<Option<AppbarLease>, String> {
+    let original = appbar_state(hwnd);
+    if original & ABS_AUTOHIDE != 0 {
+        return Ok(None);
+    }
+    let applied = original | ABS_AUTOHIDE;
+    let cancel = spawn_appbar_guardian(original, applied)?;
+    set_appbar_state(hwnd, applied);
+    if appbar_state(hwnd) & ABS_AUTOHIDE == 0 {
+        unsafe {
+            let _ = SetEvent(cancel);
+            let _ = windows::Win32::Foundation::CloseHandle(cancel);
+        }
+        return Err(
+            "Windows did not enable taskbar auto-hide; the taskbar was kept visible".into(),
+        );
+    }
+    Ok(Some(AppbarLease {
+        original,
+        applied,
+        cancel: cancel.0 as isize,
+    }))
+}
+fn spawn_appbar_guardian(
+    original: u32,
+    applied: u32,
+) -> Result<windows::Win32::Foundation::HANDLE, String> {
+    use std::os::windows::process::CommandExt;
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nonce = NEXT.fetch_add(1, Ordering::Relaxed);
+    let prefix = format!(
+        "Local\\Atelier.Dock.Appbar.{}.{}",
+        std::process::id(),
+        nonce
+    );
+    let ready_name = format!("{prefix}.ready");
+    let cancel_name = format!("{prefix}.cancel");
+    let wide = |name: &str| name.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+    let ready_w = wide(&ready_name);
+    let cancel_w = wide(&cancel_name);
+    let ready = unsafe { CreateEventW(None, true, false, PCWSTR(ready_w.as_ptr())) }
+        .map_err(|e| e.to_string())?;
+    let cancel = match unsafe { CreateEventW(None, true, false, PCWSTR(cancel_w.as_ptr())) } {
+        Ok(h) => h,
+        Err(e) => {
+            let _ = unsafe { windows::Win32::Foundation::CloseHandle(ready) };
+            return Err(e.to_string());
+        }
+    };
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(e) => {
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(ready);
+                let _ = windows::Win32::Foundation::CloseHandle(cancel);
+            }
+            return Err(e.to_string());
+        }
+    };
+    let child = std::process::Command::new(exe)
+        .args([
+            "--dock-appbar-watchdog",
+            &std::process::id().to_string(),
+            &original.to_string(),
+            &applied.to_string(),
+            &ready_name,
+            &cancel_name,
+        ])
+        .creation_flags(0x08000000)
+        .spawn();
+    let mut child = match child {
+        Ok(c) => c,
+        Err(e) => {
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(ready);
+                let _ = windows::Win32::Foundation::CloseHandle(cancel);
+            }
+            return Err(e.to_string());
+        }
+    };
+    let ok =
+        unsafe { WaitForSingleObject(ready, 2000) } == windows::Win32::Foundation::WAIT_OBJECT_0;
+    unsafe {
+        let _ = windows::Win32::Foundation::CloseHandle(ready);
+    }
+    if !ok {
+        let _ = child.kill();
+        let _ = child.wait();
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(cancel);
+        }
+        return Err("Taskbar recovery guardian did not start".into());
+    }
+    Ok(cancel)
+}
+fn appbar_guardian_args(args: &[String]) -> bool {
+    if args.get(1).map(String::as_str) != Some("--dock-appbar-watchdog") {
+        return false;
+    }
+    if let (Some(pid), Some(original), Some(applied), Some(ready_name), Some(cancel_name)) = (
+        args.get(2).and_then(|v| v.parse::<u32>().ok()),
+        args.get(3).and_then(|v| v.parse::<u32>().ok()),
+        args.get(4).and_then(|v| v.parse::<u32>().ok()),
+        args.get(5),
+        args.get(6),
+    ) {
+        let wide = |name: &str| name.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+        let ready = wide(ready_name);
+        let cancel = wide(cancel_name);
+        if let (Ok(process), Ok(cancel), Ok(ready)) = unsafe {
+            (
+                OpenProcess(PROCESS_SYNCHRONIZE, false, pid),
+                OpenEventW(SYNCHRONIZATION_SYNCHRONIZE, false, PCWSTR(cancel.as_ptr())),
+                OpenEventW(EVENT_MODIFY_STATE, false, PCWSTR(ready.as_ptr())),
+            )
+        } {
+            unsafe {
+                let _ = SetEvent(ready);
+                let _ = windows::Win32::Foundation::CloseHandle(ready);
+            }
+            let result = unsafe { WaitForMultipleObjects(&[cancel, process], false, INFINITE) };
+            if result.0 == windows::Win32::Foundation::WAIT_OBJECT_0.0 + 1 {
+                restore_appbar_if_owned(original, applied);
+            }
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(cancel);
+                let _ = windows::Win32::Foundation::CloseHandle(process);
+            }
+        }
+    }
+    true
 }
 fn show_taskbar(handle: isize) {
     let mut class = [0u16; 80];
@@ -266,6 +579,9 @@ pub(crate) fn spawn_watchdog(handle: isize) -> Result<(), String> {
 }
 pub fn watchdog_args() -> bool {
     let args: Vec<_> = std::env::args().collect();
+    if appbar_guardian_args(&args) {
+        return true;
+    }
     if args.get(1).map(String::as_str) != Some("--dock-watchdog") {
         return false;
     }
@@ -301,7 +617,21 @@ struct Running {
     pid: u32,
     path: String,
     name: String,
+    class: String,
     active: bool,
+}
+fn is_system_host(path: &str) -> bool {
+    PathBuf::from(path).file_name().is_some_and(|name| {
+        [
+            "applicationframehost.exe",
+            "shellexperiencehost.exe",
+            "textinputhost.exe",
+            "searchhost.exe",
+            "startmenuexperiencehost.exe",
+        ]
+        .iter()
+        .any(|skip| name.eq_ignore_ascii_case(skip))
+    })
 }
 fn running_windows() -> Vec<Running> {
     unsafe extern "system" fn visit(handle: HWND, arg: LPARAM) -> BOOL {
@@ -334,10 +664,11 @@ fn running_windows() -> Vec<Running> {
         let _ = windows::Win32::Foundation::CloseHandle(process);
         if result.is_ok() {
             let path = String::from_utf16_lossy(&buffer[..size as usize]);
-            if !path.to_lowercase().ends_with("\\applicationframehost.exe")
-                && !path.to_lowercase().ends_with("\\shellexperiencehost.exe")
-            {
+            if !is_system_host(&path) {
+                let mut class = [0u16; 256];
+                let class_len = GetClassNameW(handle, &mut class).max(0) as usize;
                 list.push(Running {
+                    class: String::from_utf16_lossy(&class[..class_len]),
                     handle: handle.0 as isize,
                     pid,
                     path,
@@ -352,7 +683,35 @@ fn running_windows() -> Vec<Running> {
     let _ = unsafe { EnumWindows(Some(visit), LPARAM(&mut list as *mut _ as isize)) };
     list
 }
-fn shortcut_target(path: &str) -> Option<String> {
+#[derive(Default)]
+struct ShortcutInfo {
+    target: Option<String>,
+    process_name: Option<String>,
+    icon_path: Option<String>,
+    icon_index: i32,
+}
+fn expand_environment(value: &str) -> String {
+    let mut result = String::new();
+    let mut parts = value.split('%');
+    result.push_str(parts.next().unwrap_or(""));
+    while let Some(name) = parts.next() {
+        if let Some(rest) = parts.next() {
+            if let Some(expanded) = std::env::var_os(name) {
+                result.push_str(&expanded.to_string_lossy());
+            } else {
+                result.push('%');
+                result.push_str(name);
+                result.push('%');
+            }
+            result.push_str(rest);
+        } else {
+            result.push('%');
+            result.push_str(name);
+        }
+    }
+    result
+}
+fn shortcut_info(path: &str) -> Option<ShortcutInfo> {
     let wide: Vec<u16> = path.encode_utf16().chain(Some(0)).collect();
     unsafe {
         let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).ok()?;
@@ -360,15 +719,142 @@ fn shortcut_target(path: &str) -> Option<String> {
             .ok()?
             .Load(PCWSTR(wide.as_ptr()), STGM_READ)
             .ok()?;
+        let mut info = ShortcutInfo::default();
         let mut buffer = [0u16; 32768];
-        link.GetPath(&mut buffer, std::ptr::null_mut(), 0).ok()?;
-        let n = buffer.iter().position(|c| *c == 0)?;
-        if n == 0 {
-            None
-        } else {
-            Some(String::from_utf16_lossy(&buffer[..n]))
+        if link.GetPath(&mut buffer, std::ptr::null_mut(), 0).is_ok() {
+            let n = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
+            if n > 0 {
+                info.target = Some(expand_environment(&String::from_utf16_lossy(&buffer[..n])));
+            }
+        }
+        buffer.fill(0);
+        if link
+            .GetIconLocation(&mut buffer, &mut info.icon_index)
+            .is_ok()
+        {
+            let n = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
+            if n > 0 {
+                info.icon_path = Some(expand_environment(&String::from_utf16_lossy(&buffer[..n])));
+            }
+        }
+        buffer.fill(0);
+        if link.GetArguments(&mut buffer).is_ok() {
+            let n = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
+            info.process_name = launcher_process_name(&String::from_utf16_lossy(&buffer[..n]));
+        }
+        if info.target.is_none()
+            && info
+                .icon_path
+                .as_ref()
+                .and_then(|p| {
+                    PathBuf::from(p)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                })
+                .is_some_and(|name| name.eq_ignore_ascii_case("explorer.exe"))
+        {
+            info.target = info.icon_path.clone();
+        }
+        Some(info)
+    }
+}
+fn launcher_process_name(args: &str) -> Option<String> {
+    let args: Vec<&str> = args.split_whitespace().collect();
+    for pair in args.windows(2) {
+        if pair[0].eq_ignore_ascii_case("--processStart") {
+            let name = pair[1].trim_matches('"');
+            if !name.is_empty()
+                && !name.contains(['\\', '/', ':'])
+                && name.to_ascii_lowercase().ends_with(".exe")
+            {
+                return Some(name.into());
+            }
         }
     }
+    None
+}
+fn pin_matches(target: &str, process_name: Option<&str>, running: &Running) -> bool {
+    let explorer = PathBuf::from(target)
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case("explorer.exe"));
+    if explorer
+        && !["CabinetWClass", "ExploreWClass"]
+            .iter()
+            .any(|class| class.eq_ignore_ascii_case(&running.class))
+    {
+        return false;
+    }
+    if key(&running.path) == key(target) {
+        return true;
+    }
+    if PathBuf::from(target)
+        .file_name()
+        .is_some_and(|n| n.eq_ignore_ascii_case("steam.exe"))
+        && PathBuf::from(&running.path)
+            .file_name()
+            .is_some_and(|n| n.eq_ignore_ascii_case("steamwebhelper.exe"))
+    {
+        if let Some(parent) = PathBuf::from(target).parent() {
+            return key(&running.path).starts_with(&(key(&parent.to_string_lossy()) + "\\"));
+        }
+    }
+    let Some(process_name) = process_name else {
+        return false;
+    };
+    let Some(parent) = PathBuf::from(target)
+        .parent()
+        .map(|p| key(&p.to_string_lossy()))
+    else {
+        return false;
+    };
+    let path = key(&running.path);
+    let candidate = PathBuf::from(&running.path)
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case(process_name));
+    candidate && path.starts_with(&(parent + "\\"))
+}
+fn shortcut_icon(info: &ShortcutInfo, state: &DockState) -> String {
+    let Some(path) = info.icon_path.as_ref() else {
+        return String::new();
+    };
+    let cache_key = format!("{path},{}", info.icon_index);
+    if let Ok(cache) = state.icons.lock() {
+        if let Some(icon) = cache.get(&cache_key) {
+            return icon.clone();
+        }
+    }
+    let wide: Vec<u16> = path.encode_utf16().chain(Some(0)).collect();
+    let mut handle = HICON::default();
+    let mut icon = if path.to_ascii_lowercase().ends_with(".ico") {
+        file_icon(path, state)
+    } else {
+        String::new()
+    };
+    if icon.is_empty() {
+        let result = unsafe {
+            SHDefExtractIconW(
+                PCWSTR(wide.as_ptr()),
+                info.icon_index,
+                0,
+                Some(&mut handle),
+                None,
+                256,
+            )
+        };
+        if result.is_ok() && !handle.0.is_null() {
+            icon = super::hicon_to_bmp_base64(handle, 256).unwrap_or_default();
+            let _ = unsafe { DestroyIcon(handle) };
+        }
+    }
+    if !icon.is_empty() {
+        if let Ok(mut cache) = state.icons.lock() {
+            if cache.len() > 256 {
+                cache.clear();
+            }
+            cache.insert(cache_key, icon.clone());
+        }
+    }
+    icon
 }
 fn file_icon(path: &str, state: &DockState) -> String {
     if let Ok(cache) = state.icons.lock() {
@@ -384,16 +870,37 @@ fn file_icon(path: &str, state: &DockState) -> String {
             windows::Win32::Storage::FileSystem::FILE_FLAGS_AND_ATTRIBUTES(0),
             Some(&mut info),
             std::mem::size_of::<SHFILEINFOW>() as u32,
-            SHGFI_ICON | SHGFI_LARGEICON,
+            SHGFI_SYSICONINDEX,
         )
     };
-    let icon = if result != 0 && !info.hIcon.0.is_null() {
-        let value = super::hicon_to_bmp_base64(info.hIcon, 64).unwrap_or_default();
-        let _ = unsafe { DestroyIcon(info.hIcon) };
-        value
-    } else {
-        String::new()
-    };
+    let mut icon = String::new();
+    if result != 0 {
+        if let Ok(images) =
+            unsafe { SHGetImageList::<windows::Win32::UI::Controls::IImageList>(SHIL_JUMBO as i32) }
+        {
+            if let Ok(handle) = unsafe {
+                images.GetIcon(info.iIcon, windows::Win32::UI::Controls::ILD_TRANSPARENT.0)
+            } {
+                icon = super::hicon_to_bmp_base64(handle, 256).unwrap_or_default();
+                let _ = unsafe { DestroyIcon(handle) };
+            }
+        }
+    }
+    if icon.is_empty() {
+        let result = unsafe {
+            SHGetFileInfoW(
+                PCWSTR(wide.as_ptr()),
+                windows::Win32::Storage::FileSystem::FILE_FLAGS_AND_ATTRIBUTES(0),
+                Some(&mut info),
+                std::mem::size_of::<SHFILEINFOW>() as u32,
+                SHGFI_ICON | SHGFI_LARGEICON,
+            )
+        };
+        if result != 0 && !info.hIcon.0.is_null() {
+            icon = super::hicon_to_bmp_base64(info.hIcon, 128).unwrap_or_default();
+            let _ = unsafe { DestroyIcon(info.hIcon) };
+        }
+    }
     if !icon.is_empty() {
         if let Ok(mut cache) = state.icons.lock() {
             if cache.len() > 256 {
@@ -422,14 +929,14 @@ fn window_icon(running: &[&Running]) -> String {
                 )
             };
             if delivered.0 != 0 && result != 0 {
-                if let Some(icon) = super::hicon_to_bmp_base64(HICON(result as *mut _), 64) {
+                if let Some(icon) = super::hicon_to_bmp_base64(HICON(result as *mut _), 128) {
                     return icon;
                 }
             }
         }
         let icon = unsafe { GetClassLongPtrW(handle, GCLP_HICON) };
         if icon != 0 {
-            if let Some(icon) = super::hicon_to_bmp_base64(HICON(icon as *mut _), 64) {
+            if let Some(icon) = super::hicon_to_bmp_base64(HICON(icon as *mut _), 128) {
                 return icon;
             }
         }
@@ -446,35 +953,91 @@ pub struct DockItem {
     pub running: bool,
     pub active: bool,
     pub windows: usize,
+    pub hidden: bool,
 }
 #[derive(Serialize)]
 pub struct DockSnapshot {
     pub config: DockConfig,
     pub items: Vec<DockItem>,
     pub monitors: Vec<String>,
+    pub fullscreen_hidden: bool,
+}
+fn hidden_matches_running(hidden: &Pin, info: Option<&ShortcutInfo>, running: &Running) -> bool {
+    if key(&hidden.path) == key(&running.path) {
+        return true;
+    }
+    info.and_then(|i| {
+        i.target
+            .as_deref()
+            .map(|target| pin_matches(target, i.process_name.as_deref(), running))
+    })
+    .unwrap_or(false)
 }
 fn items(state: &DockState, c: &DockConfig) -> Vec<DockItem> {
     let running = running_windows();
+    let hidden_links: Vec<_> = c
+        .hidden_apps
+        .iter()
+        .map(|h| {
+            if h.path.to_ascii_lowercase().ends_with(".lnk") {
+                shortcut_info(&h.path)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let mut represented_hidden = HashSet::new();
     let mut used = HashSet::new();
     let mut result = Vec::new();
     for pin in &c.pinned {
-        let target = if pin.path.to_lowercase().ends_with(".lnk") {
-            shortcut_target(&pin.path).unwrap_or_else(|| pin.path.clone())
+        let info = if pin.path.to_ascii_lowercase().ends_with(".lnk") {
+            shortcut_info(&pin.path)
         } else {
-            pin.path.clone()
+            None
         };
+        let target = info
+            .as_ref()
+            .and_then(|i| i.target.clone())
+            .unwrap_or_else(|| pin.path.clone());
         let matches: Vec<_> = running
             .iter()
-            .filter(|r| key(&r.path) == key(&target))
+            .filter(|r| {
+                pin_matches(
+                    &target,
+                    info.as_ref().and_then(|i| i.process_name.as_deref()),
+                    r,
+                )
+            })
             .collect();
         for r in &matches {
             used.insert(r.handle);
         }
+        let hidden = c
+            .hidden_apps
+            .iter()
+            .zip(&hidden_links)
+            .fold(false, |any, (h, info)| {
+                let matched = key(&h.path) == key(&pin.path)
+                    || key(&h.path) == key(&target)
+                    || matches
+                        .iter()
+                        .any(|r| hidden_matches_running(h, info.as_ref(), r));
+                if matched {
+                    represented_hidden.insert(key(&h.path));
+                }
+                any || matched
+            });
         result.push(DockItem {
             id: pin.path.clone(),
             name: pin.name.clone(),
             icon: pin.icon.clone().unwrap_or_else(|| {
-                let mut icon = file_icon(&pin.path, state);
+                let mut icon = info
+                    .as_ref()
+                    .map(|i| shortcut_icon(i, state))
+                    .unwrap_or_default();
+                if icon.is_empty() {
+                    icon = file_icon(&pin.path, state);
+                }
                 if icon.is_empty() && target != pin.path {
                     icon = file_icon(&target, state);
                 }
@@ -487,6 +1050,7 @@ fn items(state: &DockState, c: &DockConfig) -> Vec<DockItem> {
             running: !matches.is_empty(),
             active: matches.iter().any(|r| r.active),
             windows: matches.len(),
+            hidden,
         });
     }
     if c.show_running {
@@ -503,6 +1067,19 @@ fn items(state: &DockState, c: &DockConfig) -> Vec<DockItem> {
             }
         }
         for (path, group) in groups {
+            let hidden = c
+                .hidden_apps
+                .iter()
+                .zip(&hidden_links)
+                .fold(false, |any, (h, info)| {
+                    let matched = group
+                        .iter()
+                        .any(|r| hidden_matches_running(h, info.as_ref(), r));
+                    if matched {
+                        represented_hidden.insert(key(&h.path));
+                    }
+                    any || matched
+                });
             result.push(DockItem {
                 id: path.clone(),
                 name: PathBuf::from(&path)
@@ -522,38 +1099,199 @@ fn items(state: &DockState, c: &DockConfig) -> Vec<DockItem> {
                 running: true,
                 active: group.iter().any(|r| r.active),
                 windows: group.len(),
+                hidden,
             });
         }
     }
+    for hidden in &c.hidden_apps {
+        if !represented_hidden.contains(&key(&hidden.path))
+            && !result.iter().any(|item| key(&item.id) == key(&hidden.path))
+            && !c
+                .pinned
+                .iter()
+                .any(|pin| key(&pin.path) == key(&hidden.path))
+        {
+            result.push(DockItem {
+                id: hidden.path.clone(),
+                name: hidden.name.clone(),
+                icon: file_icon(&hidden.path, state),
+                pinned: false,
+                running: false,
+                active: false,
+                windows: 0,
+                hidden: true,
+            });
+        }
+    }
+    if let Some(favorites) = taskband_favorites() {
+        merge_running_taskbar_order(&mut result, &favorites);
+    }
     result
+}
+fn taskbar_shortcuts() -> Vec<PathBuf> {
+    let Some(root) = std::env::var_os("APPDATA") else {
+        return Vec::new();
+    };
+    let dir =
+        PathBuf::from(root).join("Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar");
+    let mut paths: Vec<_> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("lnk")))
+        .collect();
+    paths.sort();
+    paths.truncate(64);
+    paths
+}
+fn taskband_favorites() -> Option<Vec<u8>> {
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_BINARY};
+    let mut size = 0u32;
+    let path = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Taskband");
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            path,
+            w!("Favorites"),
+            RRF_RT_REG_BINARY,
+            None,
+            None,
+            Some(&mut size),
+        )
+    };
+    if status.0 != 0 || size == 0 || size > 1024 * 1024 {
+        return None;
+    }
+    let mut data = vec![0u8; size as usize];
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            path,
+            w!("Favorites"),
+            RRF_RT_REG_BINARY,
+            None,
+            Some(data.as_mut_ptr().cast()),
+            Some(&mut size),
+        )
+    };
+    if status.0 != 0 || size as usize > data.len() {
+        return None;
+    }
+    data.truncate(size as usize);
+    Some(data)
+}
+fn taskband_name_offset(favorites: &[u8], name: &str) -> Option<usize> {
+    if name.is_empty() {
+        return None;
+    }
+    let needle: Vec<u8> = name
+        .encode_utf16()
+        .chain(Some(0))
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    favorites
+        .windows(needle.len())
+        .position(|part| part == needle)
+}
+fn merge_running_taskbar_order(items: &mut [DockItem], favorites: &[u8]) {
+    let pinned_offsets: Option<Vec<_>> = items
+        .iter()
+        .filter(|item| item.pinned)
+        .map(|item| {
+            let path = PathBuf::from(&item.id);
+            taskband_name_offset(favorites, path.file_name()?.to_str()?)
+        })
+        .collect();
+    let Some(offsets) = pinned_offsets else {
+        return;
+    };
+    if offsets.is_empty() || offsets.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return;
+    }
+    items.sort_by_key(|item| {
+        let path = PathBuf::from(&item.id);
+        let name = if item.pinned {
+            path.file_name().and_then(|n| n.to_str())
+        } else {
+            path.file_stem()
+                .and_then(|n| n.to_str())
+                .filter(|name| name.chars().count() >= 3)
+        };
+        name.and_then(|name| taskband_name_offset(favorites, name))
+            .unwrap_or(usize::MAX)
+    });
+}
+fn order_pins_from_taskband(pins: &mut [Pin], favorites: &[u8]) -> bool {
+    let mut positions = Vec::with_capacity(pins.len());
+    for pin in pins.iter() {
+        let Some(name) = PathBuf::from(&pin.path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(str::to_owned)
+        else {
+            return false;
+        };
+        let needle: Vec<u8> = name
+            .encode_utf16()
+            .chain(Some(0))
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        let Some(at) = favorites
+            .windows(needle.len())
+            .position(|part| part == needle)
+        else {
+            return false;
+        };
+        positions.push((key(&pin.path), at));
+    }
+    let mut unique = HashSet::new();
+    if !positions.iter().all(|(_, offset)| unique.insert(*offset)) {
+        return false;
+    }
+    let before: Vec<_> = pins.iter().map(|p| p.path.clone()).collect();
+    pins.sort_by_key(|pin| {
+        positions
+            .iter()
+            .find(|(path, _)| *path == key(&pin.path))
+            .map(|(_, at)| *at)
+            .unwrap_or(usize::MAX)
+    });
+    pins.iter().map(|p| &p.path).ne(before.iter())
+}
+fn repair_legacy_import(c: &mut DockConfig) -> bool {
+    if !c.imported || c.pinned.is_empty() {
+        return false;
+    }
+    let paths = taskbar_shortcuts();
+    let stored: Vec<_> = c
+        .pinned
+        .iter()
+        .map(|pin| PathBuf::from(&pin.path))
+        .collect();
+    if stored != paths {
+        return false;
+    }
+    taskband_favorites()
+        .is_some_and(|favorites| order_pins_from_taskband(&mut c.pinned, &favorites))
 }
 fn import_pins(c: &mut DockConfig) {
     if c.imported {
         return;
     }
     c.imported = true;
-    if let Some(root) = std::env::var_os("APPDATA") {
-        if let Ok(entries) = std::fs::read_dir(
-            PathBuf::from(root)
-                .join("Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar"),
-        ) {
-            let mut paths: Vec<_> = entries
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("lnk")))
-                .collect();
-            paths.sort();
-            for p in paths {
-                if c.pinned.len() >= 64 {
-                    break;
-                }
-                c.pinned.push(Pin {
-                    name: p.file_stem().unwrap_or_default().to_string_lossy().into(),
-                    path: p.to_string_lossy().into(),
-                    icon: None,
-                })
-            }
+    for p in taskbar_shortcuts() {
+        if c.pinned.len() >= 64 {
+            break;
         }
+        c.pinned.push(Pin {
+            name: p.file_stem().unwrap_or_default().to_string_lossy().into(),
+            path: p.to_string_lossy().into(),
+            icon: None,
+        });
+    }
+    if let Some(favorites) = taskband_favorites() {
+        order_pins_from_taskband(&mut c.pinned, &favorites);
     }
 }
 
@@ -681,25 +1419,189 @@ fn ensure_window(app: &tauri::AppHandle) -> Result<(), String> {
     }
     Ok(())
 }
+fn apply_bottom_gap(app: &tauri::AppHandle, c: &DockConfig) -> Result<(), String> {
+    let state = app.state::<DockState>();
+    if !c.enabled || c.maximized_bottom_gap == 0 || super::dock_test_mode() {
+        state.remove_gap_appbar();
+        return Ok(());
+    }
+    let previous = *state.gap_appbar.lock().map_err(|e| e.to_string())?;
+    if previous
+        .is_some_and(|(_, monitor, gap)| monitor == c.monitor && gap == c.maximized_bottom_gap)
+    {
+        return Ok(());
+    }
+    if app.get_webview_window("dock-gap").is_none() {
+        tauri::WebviewWindowBuilder::new(
+            app,
+            "dock-gap",
+            tauri::WebviewUrl::App("dock-gap.html".into()),
+        )
+        .decorations(false)
+        .skip_taskbar(true)
+        .visible(false)
+        .focused(false)
+        .inner_size(1., 1.)
+        .build()
+        .map_err(|e| e.to_string())?;
+    }
+    let window = app
+        .get_webview_window("dock-gap")
+        .ok_or("Work area window unavailable")?;
+    let handle = window.hwnd().map_err(|e| e.to_string())?;
+    let monitors = app.available_monitors().map_err(|e| e.to_string())?;
+    let monitor = monitors
+        .get(c.monitor)
+        .or(monitors.first())
+        .ok_or("No monitor available")?;
+    let pos = monitor.position();
+    let size = monitor.size();
+    let height = ((c.maximized_bottom_gap as f64 * monitor.scale_factor()).round() as i32)
+        .min(size.height as i32 - 1)
+        .max(1);
+    let mut data = APPBARDATA {
+        cbSize: std::mem::size_of::<APPBARDATA>() as u32,
+        hWnd: HWND(handle.0 as _),
+        uCallbackMessage: WM_APP + 42,
+        uEdge: ABE_BOTTOM,
+        rc: windows::Win32::Foundation::RECT {
+            left: pos.x,
+            top: pos.y + size.height as i32 - height,
+            right: pos.x + size.width as i32,
+            bottom: pos.y + size.height as i32,
+        },
+        ..Default::default()
+    };
+    let registered =
+        previous.is_some_and(|(previous_handle, _, _)| previous_handle == handle.0 as isize);
+    if !registered && unsafe { SHAppBarMessage(ABM_NEW, &mut data) } == 0 {
+        return Err("Windows could not reserve space for the dock".into());
+    }
+    unsafe {
+        SHAppBarMessage(ABM_QUERYPOS, &mut data);
+    }
+    data.rc.top = data.rc.bottom - height;
+    if unsafe { SHAppBarMessage(ABM_SETPOS, &mut data) } == 0 {
+        if !registered {
+            unsafe {
+                SHAppBarMessage(ABM_REMOVE, &mut data);
+            }
+        }
+        return Err("Windows could not set the dock work area".into());
+    }
+    *state.gap_appbar.lock().map_err(|e| e.to_string())? =
+        Some((handle.0 as isize, c.monitor, c.maximized_bottom_gap));
+    Ok(())
+}
+fn fullscreen_on_dock_monitor(app: &tauri::AppHandle, c: &DockConfig) -> bool {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::Graphics::Gdi::{
+        MonitorFromPoint, MonitorFromWindow, MONITOR_DEFAULTTONEAREST,
+    };
+    if super::dock_test_mode() || !c.enabled {
+        return false;
+    }
+    let foreground = unsafe { GetForegroundWindow() };
+    let mut pid = 0;
+    unsafe {
+        GetWindowThreadProcessId(foreground, Some(&mut pid));
+    }
+    if foreground.0.is_null()
+        || pid == 0
+        || pid == std::process::id()
+        || !unsafe { IsWindowVisible(foreground) }.as_bool()
+        || unsafe { IsIconic(foreground) }.as_bool()
+    {
+        return false;
+    }
+    if !atelier_wallpaper::occlusion::is_fullscreen_window_active()
+        && !atelier_wallpaper::occlusion::is_fullscreen_game_or_presentation()
+    {
+        return false;
+    }
+    let Ok(monitors) = app.available_monitors() else {
+        return false;
+    };
+    let Some(monitor) = monitors.get(c.monitor).or(monitors.first()) else {
+        return false;
+    };
+    let point = POINT {
+        x: monitor
+            .position()
+            .x
+            .saturating_add((monitor.size().width / 2) as i32),
+        y: monitor
+            .position()
+            .y
+            .saturating_add((monitor.size().height / 2) as i32),
+    };
+    unsafe {
+        MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST)
+            == MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST)
+    }
+}
+
+fn dock_visibility_action(enabled: bool, fullscreen: bool, visible: bool) -> Option<bool> {
+    let should_show = enabled && !fullscreen;
+    (visible != should_show).then_some(should_show)
+}
+fn sync_dock_visibility(app: &tauri::AppHandle, c: &DockConfig) -> Result<(), String> {
+    let Some(window) = app.get_webview_window("desktop-dock") else {
+        return Ok(());
+    };
+    let fullscreen = fullscreen_on_dock_monitor(app, c);
+    if let Some(should_show) = dock_visibility_action(
+        c.enabled,
+        fullscreen,
+        window.is_visible().map_err(|e| e.to_string())?,
+    ) {
+        if should_show {
+            window.show()
+        } else {
+            window.hide()
+        }
+        .map_err(|e| e.to_string())?;
+    }
+    let state = app.state::<DockState>();
+    if state.fullscreen_hidden.swap(fullscreen, Ordering::SeqCst) != fullscreen {
+        let _ = app.emit_to("desktop-dock", "dock-fullscreen-changed", fullscreen);
+    }
+    Ok(())
+}
+
 fn apply(app: &tauri::AppHandle, c: &DockConfig) -> Result<(), String> {
     if c.enabled {
         ensure_window(app)?;
         place(app, false)?;
-        app.get_webview_window("desktop-dock")
-            .ok_or("Dock window unavailable")?
-            .show()
-            .map_err(|e| e.to_string())?;
-    } else {
-        if let Some(window) = app.get_webview_window("desktop-dock") {
-            window.hide().map_err(|e| e.to_string())?;
-        }
     }
     app.state::<DockState>().maintain_native_taskbar()?;
+    apply_bottom_gap(app, c)?;
+    sync_dock_visibility(app, c)?;
     app.emit("dock-config-changed", c)
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+fn workarea_changed(old: &DockConfig, new: &DockConfig) -> bool {
+    old.enabled != new.enabled
+        || (old.enabled
+            && new.enabled
+            && (old.maximized_bottom_gap != new.maximized_bottom_gap
+                || (new.maximized_bottom_gap != 0 && old.monitor != new.monitor)))
+}
 pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
+    if !super::dock_test_mode() {
+        let state = app.state::<DockState>();
+        let _write = state.write.lock().map_err(|e| e.to_string())?;
+        let mut config = state.config.lock().map_err(|e| e.to_string())?;
+        let mut migrated = config.clone();
+        if repair_legacy_import(&mut migrated) {
+            if let Err(error) = persist(&migrated) {
+                tracing::warn!(%error, "Could not save imported taskbar order");
+            } else {
+                *config = migrated;
+            }
+        }
+    }
     let c = app
         .state::<DockState>()
         .config
@@ -707,6 +1609,23 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .clone();
     apply(app, &c)?;
+    let fullscreen_app = app.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let state = fullscreen_app.state::<DockState>();
+        if state.stopping.load(Ordering::Relaxed) {
+            break;
+        }
+        let Ok(_write) = state.write.try_lock() else {
+            continue;
+        };
+        let Ok(config) = state.config.lock().map(|c| c.clone()) else {
+            continue;
+        };
+        if let Err(error) = sync_dock_visibility(&fullscreen_app, &config) {
+            tracing::warn!(%error, "Could not update dock visibility for fullscreen");
+        }
+    });
     let app = app.clone();
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(2));
@@ -730,6 +1649,7 @@ pub async fn get_dock_snapshot(app: tauri::AppHandle) -> Result<DockSnapshot, St
         let result = DockSnapshot {
             items: items(&state, &c),
             config: c,
+            fullscreen_hidden: state.fullscreen_hidden.load(Ordering::Relaxed),
             monitors: app
                 .available_monitors()
                 .map_err(|e| e.to_string())?
@@ -760,8 +1680,7 @@ pub async fn set_dock_config(
     let state = app.state::<DockState>();
     let _write = state.write.lock().map_err(|e| e.to_string())?;
     let old = state.config.lock().map_err(|e| e.to_string())?.clone();
-    config.pinned = old.pinned.clone();
-    config.imported = old.imported;
+    config.preserve_managed(&old);
     if config.enabled {
         import_pins(&mut config)
     }
@@ -769,18 +1688,89 @@ pub async fn set_dock_config(
     if let Err(error) = apply(&app, &config).and_then(|_| persist(&config)) {
         *state.config.lock().map_err(|e| e.to_string())? = old.clone();
         let _ = apply(&app, &old);
+        if workarea_changed(&old, &config) {
+            super::desktop_wallpaper::repair_after_workarea_change(app.clone());
+        }
         return Err(error);
+    }
+    if workarea_changed(&old, &config) {
+        super::desktop_wallpaper::repair_after_workarea_change(app.clone());
     }
     Ok(config)
 }
+#[derive(Serialize)]
+pub struct DockAudioSnapshot {
+    pub audio: DockAudioConfig,
+    pub dock_enabled: bool,
+}
+#[tauri::command]
+pub fn get_dock_audio(
+    window: tauri::Window,
+    state: tauri::State<'_, DockState>,
+) -> Result<DockAudioSnapshot, String> {
+    if window.label() != "main" {
+        return Err("Only Studio can configure dock audio".into());
+    }
+    let c = state.config.lock().map_err(|e| e.to_string())?;
+    Ok(DockAudioSnapshot {
+        audio: c.audio.clone(),
+        dock_enabled: c.enabled,
+    })
+}
+#[tauri::command]
+pub fn set_dock_audio(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DockState>,
+    mut audio: DockAudioConfig,
+) -> Result<DockAudioSnapshot, String> {
+    if window.label() != "main" {
+        return Err("Only Studio can configure dock audio".into());
+    }
+    audio.validate()?;
+    let _write = state.write.lock().map_err(|e| e.to_string())?;
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    let mut next = config.clone();
+    next.audio = audio;
+    persist(&next)?;
+    *config = next.clone();
+    drop(config);
+    app.emit("dock-config-changed", &next)
+        .map_err(|e| e.to_string())?;
+    Ok(DockAudioSnapshot {
+        audio: next.audio,
+        dock_enabled: next.enabled,
+    })
+}
+#[tauri::command]
+pub fn dock_audio_error(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    message: String,
+) -> Result<(), String> {
+    if window.label() != "desktop-dock" {
+        return Err("Only the dock can report audio errors".into());
+    }
+    app.emit_to(
+        "main",
+        "dock-audio-error",
+        message.chars().take(300).collect::<String>(),
+    )
+    .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn reset_desktop_dock(app: tauri::AppHandle) -> Result<DockConfig, String> {
     let state = app.state::<DockState>();
     let _write = state.write.lock().map_err(|e| e.to_string())?;
+    let old = state.config.lock().map_err(|e| e.to_string())?.clone();
     let c = DockConfig::default();
     persist(&c)?;
     *state.config.lock().map_err(|e| e.to_string())? = c.clone();
     apply(&app, &c)?;
+    if old.enabled {
+        super::desktop_wallpaper::repair_after_workarea_change(app.clone());
+    }
     Ok(c)
 }
 #[tauri::command]
@@ -815,19 +1805,25 @@ pub async fn dock_activate(
                 .map_err(|e| e.to_string())?
                 .clone();
             let pin = c.pinned.iter().find(|p| p.path == id);
-            let target = pin
-                .map(|p| {
-                    if p.path.to_lowercase().ends_with(".lnk") {
-                        shortcut_target(&p.path).unwrap_or_else(|| p.path.clone())
-                    } else {
-                        p.path.clone()
-                    }
-                })
+            let info = pin
+                .filter(|p| p.path.to_ascii_lowercase().ends_with(".lnk"))
+                .and_then(|p| shortcut_info(&p.path));
+            let target = info
+                .as_ref()
+                .and_then(|i| i.target.clone())
+                .or_else(|| pin.map(|p| p.path.clone()))
                 .unwrap_or_else(|| id.clone());
             let running = running_windows();
             let matches: Vec<_> = running
                 .iter()
-                .filter(|r| key(&r.path) == key(&target))
+                .filter(|r| match pin {
+                    Some(_) => pin_matches(
+                        &target,
+                        info.as_ref().and_then(|i| i.process_name.as_deref()),
+                        r,
+                    ),
+                    None => key(&r.path) == key(&target),
+                })
                 .collect();
             if !new_instance && !matches.is_empty() {
                 let index = matches
@@ -841,8 +1837,13 @@ pub async fn dock_activate(
                 if current_pid != r.pid {
                     return Err("This window has closed".into());
                 }
-                if unsafe { IsIconic(hwnd(r.handle)) }.as_bool() {
-                    let _ = unsafe { ShowWindowAsync(hwnd(r.handle), SW_RESTORE) };
+                let window = hwnd(r.handle);
+                let can_maximize =
+                    unsafe { GetWindowLongW(window, GWL_STYLE) } as u32 & WS_MAXIMIZEBOX.0 != 0;
+                if c.maximize_on_open && can_maximize {
+                    let _ = unsafe { ShowWindowAsync(window, SW_SHOWMAXIMIZED) };
+                } else if unsafe { IsIconic(window) }.as_bool() {
+                    let _ = unsafe { ShowWindowAsync(window, SW_RESTORE) };
                 }
                 if !unsafe { SetForegroundWindow(hwnd(r.handle)) }.as_bool() {
                     return Err("Windows did not allow this window to be activated".into());
@@ -860,7 +1861,11 @@ pub async fn dock_activate(
                     PCWSTR(wide.as_ptr()),
                     None,
                     None,
-                    SW_SHOWNORMAL,
+                    if c.maximize_on_open {
+                        SW_SHOWMAXIMIZED
+                    } else {
+                        SW_SHOWNORMAL
+                    },
                 )
             };
             if result.0 as isize <= 32 {
@@ -876,6 +1881,339 @@ pub async fn dock_activate(
     .await
     .map_err(|e| e.to_string())?
 }
+#[tauri::command]
+pub async fn dock_set_hidden(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    id: String,
+    hidden: bool,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Only Studio can change app visibility".into());
+    }
+    let state = app.state::<DockState>();
+    let _write = state.write.lock().map_err(|e| e.to_string())?;
+    let mut c = state.config.lock().map_err(|e| e.to_string())?.clone();
+    if hidden {
+        let known = c
+            .pinned
+            .iter()
+            .find(|p| key(&p.path) == key(&id))
+            .cloned()
+            .or_else(|| {
+                running_windows()
+                    .into_iter()
+                    .find(|r| key(&r.path) == key(&id))
+                    .map(|r| Pin {
+                        name: PathBuf::from(&r.path)
+                            .file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into(),
+                        path: r.path,
+                        icon: None,
+                    })
+            })
+            .ok_or("App no longer available")?;
+        if !c.hidden_apps.iter().any(|p| key(&p.path) == key(&id)) {
+            c.hidden_apps.push(known);
+        }
+    } else {
+        let initialized = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_ok();
+        let pin = c.pinned.iter().find(|p| key(&p.path) == key(&id));
+        let pin_info = pin
+            .filter(|p| p.path.to_ascii_lowercase().ends_with(".lnk"))
+            .and_then(|p| shortcut_info(&p.path));
+        let target = pin_info
+            .as_ref()
+            .and_then(|i| i.target.as_deref())
+            .unwrap_or(&id);
+        let running = running_windows().into_iter().find(|r| {
+            pin_matches(
+                target,
+                pin_info.as_ref().and_then(|i| i.process_name.as_deref()),
+                r,
+            )
+        });
+        c.hidden_apps.retain(|p| {
+            if key(&p.path) == key(&id) || key(&p.path) == key(target) {
+                return false;
+            }
+            let info = if p.path.to_ascii_lowercase().ends_with(".lnk") {
+                shortcut_info(&p.path)
+            } else {
+                None
+            };
+            !running
+                .as_ref()
+                .is_some_and(|r| hidden_matches_running(p, info.as_ref(), r))
+        });
+        if initialized {
+            unsafe { CoUninitialize() }
+        }
+    }
+    c.validate()?;
+    persist(&c)?;
+    *state.config.lock().map_err(|e| e.to_string())? = c.clone();
+    app.emit("dock-config-changed", &c)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+fn native_flyout_candidate(action: &str, class: &str, name: &str, languages: &[String]) -> bool {
+    let class = class.to_lowercase();
+    if action == "tray" {
+        return class.ends_with("chevroniconview");
+    }
+    if action != "language"
+        || !class.ends_with("iconview")
+        || class.contains("notify")
+        || class.contains("chevron")
+    {
+        return false;
+    }
+    let name = name.to_lowercase();
+    languages.iter().any(|language| {
+        let language = language.to_lowercase();
+        !language.is_empty()
+            && (name == language
+                || name.starts_with(&format!("{language} "))
+                || name.starts_with(&format!("{language} (")))
+    })
+}
+
+fn open_native_flyout(action: &str, languages: &[String]) -> Result<(), String> {
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationExpandCollapsePattern,
+        IUIAutomationInvokePattern, IUIAutomationTogglePattern, TreeScope_Descendants,
+        UIA_ExpandCollapsePatternId, UIA_InvokePatternId, UIA_TogglePatternId,
+    };
+    let taskbar = primary_taskbar().ok_or("Windows taskbar is unavailable")?;
+    let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
+    let result = (|| unsafe {
+        let automation: IUIAutomation =
+            CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+                .map_err(|e| e.to_string())?;
+        let root = automation
+            .ElementFromHandle(taskbar)
+            .map_err(|e| e.to_string())?;
+        let condition = automation
+            .CreateTrueCondition()
+            .map_err(|e| e.to_string())?;
+        let elements = root
+            .FindAll(TreeScope_Descendants, &condition)
+            .map_err(|e| e.to_string())?;
+        let mut candidates = Vec::new();
+        for index in 0..elements.Length().map_err(|e| e.to_string())?.min(1500) {
+            let element = match elements.GetElement(index) {
+                Ok(element) => element,
+                Err(_) => continue,
+            };
+            let class = element
+                .CurrentClassName()
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            let name = element
+                .CurrentName()
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            if native_flyout_candidate(action, &class, &name, languages) {
+                candidates.push(element);
+            }
+        }
+        if candidates.len() != 1 {
+            return Err(format!(
+                "Windows did not expose a unique {action} control while the taskbar is hidden"
+            ));
+        }
+        let element = &candidates[0];
+        if let Ok(pattern) =
+            element.GetCurrentPatternAs::<IUIAutomationTogglePattern>(UIA_TogglePatternId)
+        {
+            return pattern.Toggle().map_err(|e| e.to_string());
+        }
+        if let Ok(pattern) =
+            element.GetCurrentPatternAs::<IUIAutomationInvokePattern>(UIA_InvokePatternId)
+        {
+            return pattern.Invoke().map_err(|e| e.to_string());
+        }
+        if let Ok(pattern) = element
+            .GetCurrentPatternAs::<IUIAutomationExpandCollapsePattern>(UIA_ExpandCollapsePatternId)
+        {
+            return pattern.Expand().map_err(|e| e.to_string());
+        }
+        Err(format!(
+            "Windows does not allow the hidden {action} control to be opened"
+        ))
+    })();
+    if initialized {
+        unsafe { CoUninitialize() }
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn dock_open_system(window: tauri::Window, action: String) -> Result<(), String> {
+    if window.label() != "desktop-dock" {
+        return Err("Only the dock can open system menus".into());
+    }
+    if action == "tray" || action == "language" {
+        let languages = if action == "language" {
+            use windows::Win32::Globalization::{
+                GetLocaleInfoW, LOCALE_SENGLANGUAGE, LOCALE_SLANGUAGE,
+            };
+            let mut names = Vec::new();
+            for item in dock_languages(window.clone())? {
+                if let Ok(layout) = usize::from_str_radix(&item.id, 16) {
+                    for kind in [LOCALE_SENGLANGUAGE, LOCALE_SLANGUAGE] {
+                        let mut buffer = [0u16; 128];
+                        let n = unsafe {
+                            GetLocaleInfoW((layout & 0xffff) as u32, kind, Some(&mut buffer))
+                        };
+                        if n > 1 {
+                            names.push(String::from_utf16_lossy(&buffer[..n as usize - 1]));
+                        }
+                    }
+                }
+                names.push(item.name);
+            }
+            names.push(dock_input_language(window)?);
+            names
+        } else {
+            Vec::new()
+        };
+        return tauri::async_runtime::spawn_blocking(move || {
+            open_native_flyout(&action, &languages)
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_A,
+        VK_LWIN, VK_N, VK_S,
+    };
+    let key = |vk: VIRTUAL_KEY, up: bool| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: vk,
+                dwFlags: if up {
+                    KEYEVENTF_KEYUP
+                } else {
+                    Default::default()
+                },
+                ..Default::default()
+            },
+        },
+    };
+    let shortcut = |vk: VIRTUAL_KEY| {
+        vec![
+            key(VK_LWIN, false),
+            key(vk, false),
+            key(vk, true),
+            key(VK_LWIN, true),
+        ]
+    };
+    let inputs = match action.as_str() {
+        "start" => vec![key(VK_LWIN, false), key(VK_LWIN, true)],
+        "search" => shortcut(VK_S),
+        "network" | "volume" => shortcut(VK_A),
+        "clock" => shortcut(VK_N),
+        _ => return Err("Unknown system action".into()),
+    };
+    if unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) } != inputs.len() as u32 {
+        let action_key = match action.as_str() {
+            "search" => Some(VK_S),
+            "network" | "volume" => Some(VK_A),
+            "clock" => Some(VK_N),
+            _ => None,
+        };
+        let mut release = Vec::new();
+        if let Some(vk) = action_key {
+            release.push(key(vk, true));
+        }
+        release.push(key(VK_LWIN, true));
+        let _ = unsafe { SendInput(&release, std::mem::size_of::<INPUT>() as i32) };
+        return Err("Windows could not open the system menu".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn dock_input_language(window: tauri::Window) -> Result<String, String> {
+    if window.label() != "desktop-dock" {
+        return Err("Only the dock can read the active input language".into());
+    }
+    use windows::Win32::Globalization::{GetLocaleInfoW, LOCALE_SABBREVLANGNAME};
+    use windows::Win32::UI::Input::KeyboardAndMouse::GetKeyboardLayout;
+    let state = window.state::<DockState>();
+    let foreground = unsafe { GetForegroundWindow() };
+    let mut pid = 0;
+    let foreground_thread = unsafe { GetWindowThreadProcessId(foreground, Some(&mut pid)) };
+    if pid != 0 && pid != std::process::id() {
+        let mut info = GUITHREADINFO {
+            cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+            ..Default::default()
+        };
+        let focused = if unsafe { GetGUIThreadInfo(foreground_thread, &mut info) }.is_ok()
+            && !info.hwndFocus.0.is_null()
+        {
+            info.hwndFocus
+        } else {
+            foreground
+        };
+        *state.language_target.lock().map_err(|e| e.to_string())? = Some((focused.0 as isize, pid));
+    }
+    let target = *state.language_target.lock().map_err(|e| e.to_string())?;
+    let thread = target
+        .map(|(handle, _)| unsafe { GetWindowThreadProcessId(hwnd(handle), None) })
+        .filter(|t| *t != 0)
+        .unwrap_or(foreground_thread);
+    let layout = unsafe { GetKeyboardLayout(thread) };
+    let lang = (layout.0 as usize & 0xffff) as u32;
+    let mut buffer = [0u16; 16];
+    let n = unsafe { GetLocaleInfoW(lang, LOCALE_SABBREVLANGNAME, Some(&mut buffer)) };
+    Ok(if n > 1 {
+        String::from_utf16_lossy(&buffer[..n as usize - 1])
+    } else {
+        "—".into()
+    })
+}
+
+#[derive(Serialize)]
+pub struct DockLanguage {
+    id: String,
+    name: String,
+}
+
+#[tauri::command]
+pub fn dock_languages(window: tauri::Window) -> Result<Vec<DockLanguage>, String> {
+    if window.label() != "desktop-dock" {
+        return Err("Only the dock can list input languages".into());
+    }
+    use windows::Win32::Globalization::{GetLocaleInfoW, LOCALE_SNATIVELANGNAME};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayoutList, HKL};
+    let count = unsafe { GetKeyboardLayoutList(None) }.clamp(0, 128) as usize;
+    let mut layouts = vec![HKL::default(); count];
+    let count = unsafe { GetKeyboardLayoutList(Some(&mut layouts)) }.max(0) as usize;
+    layouts.truncate(count);
+    Ok(layouts
+        .into_iter()
+        .map(|layout| {
+            let lang = (layout.0 as usize & 0xffff) as u32;
+            let mut buffer = [0u16; 128];
+            let n = unsafe { GetLocaleInfoW(lang, LOCALE_SNATIVELANGNAME, Some(&mut buffer)) };
+            DockLanguage {
+                id: format!("{:x}", layout.0 as usize),
+                name: if n > 1 {
+                    String::from_utf16_lossy(&buffer[..n as usize - 1])
+                } else {
+                    format!("{lang:04X}")
+                },
+            }
+        })
+        .collect())
+}
+
 #[tauri::command]
 pub async fn dock_pin(app: tauri::AppHandle, id: String, pinned: bool) -> Result<(), String> {
     let state = app.state::<DockState>();
@@ -939,7 +2277,7 @@ pub async fn dock_set_icon(
         let body = data
             .strip_prefix("data:image/png;base64,")
             .ok_or("Custom icons must be PNG images")?;
-        if data.len() > 262144
+        if data.len() > 1_000_000
             || !body.starts_with("iVBORw0KGgo")
             || !body
                 .bytes()
@@ -1012,6 +2350,273 @@ pub fn dock_native_test_probe(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fullscreen_hides_dock_and_restores_only_when_enabled() {
+        assert_eq!(dock_visibility_action(true, true, true), Some(false));
+        assert_eq!(dock_visibility_action(true, true, false), None);
+        assert_eq!(dock_visibility_action(true, false, false), Some(true));
+        assert_eq!(dock_visibility_action(true, false, true), None);
+        assert_eq!(dock_visibility_action(false, false, false), None);
+        assert_eq!(dock_visibility_action(false, false, true), Some(false));
+    }
+
+    #[test]
+    fn workarea_repair_only_runs_for_changes_that_affect_the_desktop() {
+        let old = DockConfig {
+            enabled: true,
+            maximized_bottom_gap: 40,
+            ..DockConfig::default()
+        };
+        let mut next = old.clone();
+        next.icon_size += 1;
+        assert!(!workarea_changed(&old, &next));
+        next.maximized_bottom_gap = 60;
+        assert!(workarea_changed(&old, &next));
+        next = old.clone();
+        next.monitor += 1;
+        assert!(workarea_changed(&old, &next));
+        next = old.clone();
+        next.enabled = false;
+        assert!(workarea_changed(&old, &next));
+        next = DockConfig::default();
+        let mut disabled = next.clone();
+        next.maximized_bottom_gap = 10;
+        disabled.monitor = 1;
+        assert!(!workarea_changed(&disabled, &next));
+    }
+
+    #[test]
+    fn native_flyout_matching_never_selects_other_tray_icons() {
+        let languages = vec!["українська".to_string(), "English".to_string()];
+        assert!(native_flyout_candidate(
+            "tray",
+            "SystemTray.ChevronIconView",
+            "",
+            &languages
+        ));
+        assert!(!native_flyout_candidate(
+            "tray",
+            "SystemTray.NotifyIconView",
+            "",
+            &languages
+        ));
+        assert!(native_flyout_candidate(
+            "language",
+            "SystemTray.IconView",
+            "Українська (Україна)",
+            &languages
+        ));
+        assert!(!native_flyout_candidate(
+            "language",
+            "SystemTray.NotifyIconView",
+            "English",
+            &languages
+        ));
+        assert!(!native_flyout_candidate(
+            "language",
+            "SystemTray.IconView",
+            "Englishman",
+            &languages
+        ));
+    }
+    #[test]
+    fn taskbar_order_is_used_only_when_all_shortcuts_can_be_found() {
+        let pin = |name: &str| Pin {
+            path: format!(r"C:\Pins\{name}.lnk"),
+            name: name.into(),
+            icon: None,
+        };
+        let mut pins = vec![pin("A"), pin("B"), pin("C")];
+        let encoded = |name: &str| {
+            name.encode_utf16()
+                .chain(Some(0))
+                .flat_map(u16::to_le_bytes)
+                .collect::<Vec<_>>()
+        };
+        let mut favorites = vec![17];
+        for name in ["C.lnk", "A.lnk", "B.lnk"] {
+            favorites.extend(encoded(name));
+            favorites.push(31);
+        }
+        assert!(order_pins_from_taskband(&mut pins, &favorites));
+        assert_eq!(
+            pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            ["C", "A", "B"]
+        );
+        let before = pins.clone();
+        assert!(!order_pins_from_taskband(&mut pins, &encoded("A.lnk")));
+        assert_eq!(pins, before);
+    }
+    #[test]
+    fn running_taskbar_items_fit_between_pins_without_changing_custom_pin_order() {
+        let item = |name: &str, pinned: bool| DockItem {
+            id: if pinned {
+                format!(r"C:\Pins\{name}.lnk")
+            } else {
+                format!(r"C:\Apps\{name}.exe")
+            },
+            name: name.into(),
+            icon: String::new(),
+            pinned,
+            running: true,
+            active: false,
+            windows: 1,
+            hidden: false,
+        };
+        let encoded = |name: &str| {
+            name.encode_utf16()
+                .chain(Some(0))
+                .flat_map(u16::to_le_bytes)
+                .collect::<Vec<_>>()
+        };
+        let mut favorites = Vec::new();
+        for name in ["A.lnk", "ChatGPT", "B.lnk"] {
+            favorites.extend(encoded(name));
+            favorites.push(31);
+        }
+        let mut items = vec![
+            item("A", true),
+            item("B", true),
+            item("ChatGPT", false),
+            item("Other", false),
+        ];
+        merge_running_taskbar_order(&mut items, &favorites);
+        assert_eq!(
+            items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(),
+            ["A", "ChatGPT", "B", "Other"]
+        );
+        let mut custom = vec![item("B", true), item("A", true), item("ChatGPT", false)];
+        merge_running_taskbar_order(&mut custom, &favorites);
+        assert_eq!(
+            custom.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(),
+            ["B", "A", "ChatGPT"]
+        );
+    }
+    #[test]
+    fn launcher_shortcuts_match_only_their_app_and_explorer_matches_its_windows() {
+        let running = |path: &str, class: &str| Running {
+            handle: 1,
+            pid: 1,
+            path: path.into(),
+            name: "Window".into(),
+            class: class.into(),
+            active: false,
+        };
+        let target = r"C:\Apps\Discord\Update.exe";
+        assert_eq!(
+            launcher_process_name("--processStart \"Discord.exe\"").as_deref(),
+            Some("Discord.exe")
+        );
+        assert!(pin_matches(
+            target,
+            Some("Discord.exe"),
+            &running(r"C:\Apps\Discord\app-1\Discord.exe", "Chrome_WidgetWin_1")
+        ));
+        assert!(!pin_matches(
+            target,
+            Some("Discord.exe"),
+            &running(r"C:\Other\Discord.exe", "Chrome_WidgetWin_1")
+        ));
+        assert!(!pin_matches(
+            target,
+            Some("Discord.exe"),
+            &running(r"C:\Apps\Discord\app-1\Other.exe", "Chrome_WidgetWin_1")
+        ));
+        let explorer = r"C:\Windows\explorer.exe";
+        assert!(pin_matches(
+            explorer,
+            None,
+            &running(explorer, "CabinetWClass")
+        ));
+        assert!(!pin_matches(
+            explorer,
+            None,
+            &running(explorer, "OtherWindow")
+        ));
+    }
+    #[test]
+    fn windows_pinned_shortcut_icons_can_be_resolved_when_present() {
+        let Some(root) = std::env::var_os("APPDATA") else {
+            return;
+        };
+        let dir = PathBuf::from(root)
+            .join("Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar");
+        let initialized = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_ok();
+        let state = DockState::new();
+        for name in ["Discord.lnk", "File Explorer.lnk"] {
+            let path = dir.join(name);
+            if !path.is_file() {
+                continue;
+            }
+            let info = shortcut_info(&path.to_string_lossy()).expect("Could not load shortcut");
+            if info
+                .icon_path
+                .as_ref()
+                .is_some_and(|p| PathBuf::from(p).is_file())
+            {
+                assert!(
+                    shortcut_icon(&info, &state).starts_with("data:image/png;base64,"),
+                    "Could not load {name} icon"
+                );
+            }
+        }
+        if initialized {
+            unsafe { CoUninitialize() }
+        }
+    }
+    #[test]
+    fn system_hosts_are_filtered_and_steam_helpers_match_steam() {
+        assert!(is_system_host(r"C:\Windows\SystemApps\TextInputHost.exe"));
+        assert!(is_system_host(r"C:\Windows\SearchHost.exe"));
+        assert!(!is_system_host(r"C:\Apps\Discord.exe"));
+        let r = Running {
+            handle: 1,
+            pid: 1,
+            path: r"C:\Steam\bin\steamwebhelper.exe".into(),
+            name: "Steam".into(),
+            class: "Chrome_WidgetWin_1".into(),
+            active: false,
+        };
+        assert!(pin_matches(r"C:\Steam\steam.exe", None, &r));
+        assert!(!pin_matches(r"C:\Other\steam.exe", None, &r));
+    }
+    #[test]
+    fn visibility_preferences_survive_dock_edits_and_legacy_config() {
+        let mut old: DockConfig = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
+        assert!(old.show_start && old.show_search && old.launch_animation && old.maximize_on_open);
+        old.hidden_apps.push(Pin {
+            path: r"C:\Apps\one.exe".into(),
+            name: "One".into(),
+            icon: None,
+        });
+        let mut changed = DockConfig::default();
+        changed.preserve_managed(&old);
+        assert_eq!(changed.hidden_apps, old.hidden_apps);
+        let reloaded: DockConfig =
+            serde_json::from_slice(&serde_json::to_vec(&changed).unwrap()).unwrap();
+        assert_eq!(reloaded.hidden_apps[0].name, "One");
+        let r = Running {
+            handle: 1,
+            pid: 1,
+            path: r"C:\Apps\one.exe".into(),
+            name: "One".into(),
+            class: "Class".into(),
+            active: false,
+        };
+        assert!(hidden_matches_running(&reloaded.hidden_apps[0], None, &r));
+    }
+    #[test]
+    fn appbar_restores_only_the_state_owned_by_the_dock() {
+        assert!(should_restore_appbar(0, ABS_AUTOHIDE, ABS_AUTOHIDE));
+        assert!(!should_restore_appbar(0, ABS_AUTOHIDE, 0));
+        assert!(!should_restore_appbar(0, ABS_AUTOHIDE, ABS_AUTOHIDE | 2));
+        assert!(!should_restore_appbar(
+            ABS_AUTOHIDE,
+            ABS_AUTOHIDE,
+            ABS_AUTOHIDE
+        ));
+    }
     #[test]
     fn all_edges_and_negative_monitor_origin() {
         for pos in ["left", "right", "top", "bottom"] {
@@ -1053,6 +2658,43 @@ mod tests {
         assert!(p.x >= 0 && p.y >= 0 && p.x + p.w as i32 <= 200 && p.y + p.h as i32 <= 150);
     }
     #[test]
+    fn audio_glow_is_opt_in_validated_and_preserved_by_dock_edits() {
+        let mut old: DockConfig = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
+        assert!(!old.audio.enabled);
+        old.audio.enabled = true;
+        old.audio.color = "#12abEF".into();
+        old.audio.strength = 200;
+        old.audio.shape = "both".into();
+        old.audio.shape_strength = 999;
+        old.audio.sensitivity = 999;
+        old.audio.smoothing = 999;
+        old.audio.frequency = "treble".into();
+        old.validate().unwrap();
+        assert_eq!(
+            (
+                old.audio.shape_strength,
+                old.audio.sensitivity,
+                old.audio.smoothing
+            ),
+            (100, 200, 95)
+        );
+        assert_eq!(old.audio.strength, 100);
+        let mut edited = DockConfig::default();
+        edited.preserve_managed(&old);
+        assert_eq!(edited.audio, old.audio);
+        let roundtrip: DockConfig =
+            serde_json::from_slice(&serde_json::to_vec(&edited).unwrap()).unwrap();
+        assert_eq!(roundtrip.audio, old.audio);
+        edited.audio.color = "not-a-color".into();
+        assert!(edited.validate().is_err());
+        edited.audio.color = "#112233".into();
+        edited.audio.shape = "invalid".into();
+        assert!(edited.validate().is_err());
+        edited.audio.shape = "off".into();
+        edited.audio.frequency = "invalid".into();
+        assert!(edited.validate().is_err());
+    }
+    #[test]
     fn legacy_config_defaults_and_validation() {
         let mut c: DockConfig = serde_json::from_str("{\"icon_size\":1}").unwrap();
         c.validate().unwrap();
@@ -1084,5 +2726,11 @@ mod tests {
             icon.starts_with("data:image/png;base64,"),
             "No icon returned for {path}"
         );
+        use base64::Engine;
+        let png = base64::prelude::BASE64_STANDARD
+            .decode(icon.split_once(',').unwrap().1)
+            .unwrap();
+        assert!(u32::from_be_bytes(png[16..20].try_into().unwrap()) >= 128);
+        assert!(u32::from_be_bytes(png[20..24].try_into().unwrap()) >= 128);
     }
 }
