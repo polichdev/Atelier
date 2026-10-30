@@ -14,15 +14,15 @@ use windows::Win32::{
     Foundation::{COLORREF, HWND, POINT},
     Graphics::Gdi::ScreenToClient,
     UI::WindowsAndMessaging::{
-        FindWindowExW, GetAncestor, GetClassNameW, GetDesktopWindow, GetSystemMetrics,
-        GetWindowLongPtrW, IsWindow, SetLayeredWindowAttributes, SetParent, SetWindowLongPtrW,
-        SetWindowPos, GA_PARENT, GWL_EXSTYLE, GWL_STYLE, HWND_TOP, LWA_ALPHA, SM_CXVIRTUALSCREEN,
-        SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-        SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, WS_BORDER, WS_CAPTION, WS_CHILD,
-        WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_DLGFRAME, WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME,
-        WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP, WS_EX_STATICEDGE,
-        WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE, WS_HSCROLL, WS_POPUP, WS_THICKFRAME, WS_VISIBLE,
-        WS_VSCROLL,
+        FindWindowExW, GetAncestor, GetClassNameW, GetDesktopWindow, GetSystemMetrics, GetWindow,
+        GetWindowLongPtrW, GetWindowRect, IsWindow, SetLayeredWindowAttributes, SetParent,
+        SetWindowLongPtrW, SetWindowPos, GA_PARENT, GWL_EXSTYLE, GWL_STYLE, GW_HWNDPREV, HWND_TOP,
+        LWA_ALPHA, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
+        WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_DLGFRAME,
+        WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+        WS_EX_NOREDIRECTIONBITMAP, WS_EX_STATICEDGE, WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
+        WS_HSCROLL, WS_POPUP, WS_THICKFRAME, WS_VISIBLE, WS_VSCROLL,
     },
 };
 const MAX_VIDEO: u64 = 1024 * 1024 * 1024;
@@ -64,6 +64,33 @@ fn presets() -> Vec<WallpaperItem> {
 }
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(default)]
+pub struct AudioEffects {
+    pub pulse: bool,
+    pub glow: bool,
+    pub pulse_strength: u32,
+    pub glow_strength: u32,
+}
+impl Default for AudioEffects {
+    fn default() -> Self {
+        Self {
+            pulse: false,
+            glow: false,
+            pulse_strength: 40,
+            glow_strength: 40,
+        }
+    }
+}
+impl AudioEffects {
+    fn normalize(&mut self) {
+        self.pulse_strength = self.pulse_strength.min(100);
+        self.glow_strength = self.glow_strength.min(100);
+    }
+    fn enabled(&self) -> bool {
+        self.pulse || self.glow
+    }
+}
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[serde(default)]
 pub struct WallpaperOptions {
     pub fit: String,
     pub paused: bool,
@@ -72,6 +99,7 @@ pub struct WallpaperOptions {
     pub pause_fullscreen: bool,
     pub pause_battery: bool,
     pub scene: super::scene_properties::SceneOptions,
+    pub audio: AudioEffects,
 }
 impl Default for WallpaperOptions {
     fn default() -> Self {
@@ -83,6 +111,7 @@ impl Default for WallpaperOptions {
             pause_fullscreen: true,
             pause_battery: false,
             scene: Default::default(),
+            audio: Default::default(),
         }
     }
 }
@@ -93,6 +122,7 @@ impl WallpaperOptions {
         }
         self.volume = self.volume.min(100);
         self.scene.normalize();
+        self.audio.normalize();
     }
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -135,6 +165,7 @@ impl WallpaperConfig {
             pause_fullscreen: self.pause_fullscreen,
             pause_battery: self.pause_battery,
             scene: Default::default(),
+            audio: Default::default(),
         }
     }
     fn options_for(&self, id: &str) -> WallpaperOptions {
@@ -214,6 +245,17 @@ fn save(c: &WallpaperConfig) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 impl Wallpapers {
+    pub fn audio_effects_enabled(&self) -> bool {
+        self.config
+            .lock()
+            .ok()
+            .and_then(|c| {
+                c.active
+                    .as_ref()
+                    .map(|id| c.options_for(id).audio.enabled())
+            })
+            .unwrap_or(false)
+    }
     pub fn is_active(&self) -> bool {
         self.config
             .lock()
@@ -674,6 +716,37 @@ fn attach(w: &tauri::WebviewWindow, worker: HWND) -> Result<(), String> {
     let _ = w.eval("window.dispatchEvent(new Event('resize'))");
     Ok(())
 }
+fn repair_static_worker_order(parent: HWND, wallpaper: HWND) -> Result<(), String> {
+    let Ok(background) = (unsafe { FindWindowExW(parent, HWND::default(), w!("WorkerW"), None) })
+    else {
+        return Ok(());
+    };
+    if background == wallpaper {
+        return Ok(());
+    }
+    let mut current = background;
+    for _ in 0..1024 {
+        current = match unsafe { GetWindow(current, GW_HWNDPREV) } {
+            Ok(previous) => previous,
+            Err(_) => break,
+        };
+        if current == wallpaper {
+            return Ok(());
+        }
+    }
+    unsafe {
+        SetWindowPos(
+            background,
+            wallpaper,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        )
+    }
+    .map_err(|e| format!("Could not restore the desktop layer order: {e}"))
+}
 fn ensure_window(app: &tauri::AppHandle) -> Result<(), String> {
     let width = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
     let height = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
@@ -728,6 +801,41 @@ fn ensure_window(app: &tauri::AppHandle) -> Result<(), String> {
     receive
         .recv_timeout(std::time::Duration::from_secs(5))
         .map_err(|_| "Timed out attaching wallpaper to the desktop".to_string())?
+}
+
+pub fn repair_after_workarea_change(app: tauri::AppHandle) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static REVISION: AtomicU64 = AtomicU64::new(0);
+    let revision = REVISION.fetch_add(1, Ordering::SeqCst) + 1;
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(350));
+        if REVISION.load(Ordering::SeqCst) != revision {
+            return;
+        }
+        let state = app.state::<Wallpapers>();
+        let active = state
+            .config
+            .lock()
+            .map(|config| config.active.is_some())
+            .unwrap_or(false);
+        let failed = state
+            .playback
+            .lock()
+            .map(|playback| playback.as_str() == "error")
+            .unwrap_or(true);
+        if !active || failed || app.get_webview_window("desktop-wallpaper").is_none() {
+            return;
+        }
+        if let Err(error) = super::desktop_background::refresh().and_then(|active| {
+            if active {
+                ensure_window(&app)
+            } else {
+                Ok(())
+            }
+        }) {
+            tracing::warn!(%error, "Could not restore wallpaper after the work area changed");
+        }
+    });
 }
 fn apply(app: &tauri::AppHandle, c: &WallpaperConfig) -> Result<(), String> {
     if c.active.is_some() {
@@ -831,11 +939,54 @@ pub async fn wallpaper_options(
             pause_fullscreen,
             pause_battery,
             scene: c.options_for(&id).scene,
+            audio: c.options_for(&id).audio,
         },
     );
     save(&next)?;
     *c = next.clone();
     drop(c);
+    if next.active.as_deref() == Some(id.as_str()) {
+        app.emit_to("desktop-wallpaper", "wallpaper-changed", &next)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(next)
+}
+
+#[tauri::command]
+pub fn wallpaper_audio_error(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    message: String,
+) -> Result<(), String> {
+    if window.label() != "desktop-wallpaper" {
+        return Err("Only the wallpaper can report audio errors".into());
+    }
+    let message: String = message.chars().take(300).collect();
+    app.emit_to("main", "wallpaper-audio-error", message)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn wallpaper_audio_options(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Wallpapers>,
+    id: String,
+    mut options: AudioEffects,
+) -> Result<WallpaperConfig, String> {
+    ensure_studio(&window)?;
+    options.normalize();
+    let next = {
+        let mut c = state.config.lock().map_err(|e| e.to_string())?;
+        if !c.items.iter().any(|item| item.id == id) {
+            return Err("Wallpaper is not in your library".into());
+        }
+        let mut next = c.clone();
+        next.settings.entry(id.clone()).or_default().audio = options;
+        save(&next)?;
+        *c = next.clone();
+        next
+    };
     if next.active.as_deref() == Some(id.as_str()) {
         app.emit_to("desktop-wallpaper", "wallpaper-changed", &next)
             .map_err(|e| e.to_string())?;
@@ -1019,7 +1170,26 @@ pub async fn wallpaper_repair(window: tauri::Window, app: tauri::AppHandle) -> R
                 {
                     return Err("Desktop layer was replaced".into());
                 }
-                attach(&w, parent)
+                let mut rect = windows::Win32::Foundation::RECT::default();
+                unsafe { GetWindowRect(HWND(raw.0 as _), &mut rect) }.map_err(|e| e.to_string())?;
+                let expected = unsafe {
+                    let x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                    let y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                    (
+                        x,
+                        y,
+                        x + GetSystemMetrics(SM_CXVIRTUALSCREEN),
+                        y + GetSystemMetrics(SM_CYVIRTUALSCREEN),
+                    )
+                };
+                let visible = unsafe { GetWindowLongPtrW(HWND(raw.0 as _), GWL_STYLE) }
+                    & WS_VISIBLE.0 as isize
+                    != 0;
+                if visible && (rect.left, rect.top, rect.right, rect.bottom) == expected {
+                    repair_static_worker_order(parent, HWND(raw.0 as _))
+                } else {
+                    attach(&w, parent)
+                }
             });
             let _ = send.send(result);
         })
@@ -1264,6 +1434,27 @@ fn response_in(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn audio_effects_are_opt_in_bounded_and_saved_per_wallpaper() {
+        let legacy: WallpaperOptions =
+            serde_json::from_str(r#"{"fit":"contain","volume":37}"#).unwrap();
+        assert!(!legacy.audio.enabled());
+        let mut config = WallpaperConfig::default();
+        config.settings.insert("one".into(), legacy.clone());
+        config.settings.insert("two".into(), legacy);
+        let audio = &mut config.settings.get_mut("one").unwrap().audio;
+        audio.pulse = true;
+        audio.glow = true;
+        audio.pulse_strength = 999;
+        audio.glow_strength = 150;
+        audio.normalize();
+        let restored: WallpaperConfig =
+            serde_json::from_slice(&serde_json::to_vec(&config).unwrap()).unwrap();
+        assert_eq!(restored.options_for("one").audio.pulse_strength, 100);
+        assert_eq!(restored.options_for("one").audio.glow_strength, 100);
+        assert_eq!(restored.options_for("one").volume, 37);
+        assert!(!restored.options_for("two").audio.enabled());
+    }
     #[test]
     fn legacy_settings_are_migrated_per_wallpaper_and_remain_independent() {
         let mut c: WallpaperConfig=serde_json::from_str(r#"{"items":[{"id":"preset-aurora","title":"Aurora","category":"Nature","kind":"preset","description":"A"},{"id":"preset-ocean","title":"Ocean","category":"Nature","kind":"preset","description":"B"}],"active":"preset-aurora","fit":"contain","mute":false,"volume":37,"pause_battery":true}"#).unwrap();

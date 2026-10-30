@@ -148,7 +148,15 @@ pub fn evaluate(
             "paused-fullscreen",
         ))
     } else if environment.maximized {
-        Some((settings.maximized.as_str(), "paused-maximized"))
+        let action = if fullscreen_fallback
+            && matches!(settings.fullscreen.as_deref(), None | Some("pause"))
+            && settings.maximized == "continue"
+        {
+            "pause"
+        } else {
+            settings.maximized.as_str()
+        };
+        Some((action, "paused-maximized"))
     } else if environment.focused {
         Some((settings.focused.as_str(), "paused-application"))
     } else {
@@ -306,6 +314,28 @@ fn other_audio_playing() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn wallpaper_fullscreen_pause_includes_maximized_windows_with_workarea_gaps() {
+        let mut settings = PerformanceSettings::default();
+        let env = Environment {
+            focused: true,
+            maximized: true,
+            fullscreen: false,
+            ..Default::default()
+        };
+        let paused = evaluate(&settings, &env, false, true, false);
+        assert!(paused.paused);
+        assert_eq!(paused.reason.as_deref(), Some("paused-maximized"));
+        assert!(!evaluate(&settings, &env, false, false, false).paused);
+        settings.fullscreen = Some("continue".into());
+        assert!(!evaluate(&settings, &env, false, true, false).paused);
+        settings.fullscreen = Some("pause".into());
+        assert!(evaluate(&settings, &env, false, true, false).paused);
+        settings.fullscreen = None;
+        settings.maximized = "mute".into();
+        let muted = evaluate(&settings, &env, false, true, false);
+        assert!(muted.muted && !muted.paused);
+    }
     #[test]
     fn global_policies_override_wallpaper_preferences_and_keep_manual_pause() {
         let mut settings = PerformanceSettings {
