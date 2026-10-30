@@ -589,9 +589,6 @@ pub fn run() {
     let wallpaper = None;
 
     let audio = Arc::new(Mutex::new(AudioManager::new(0x00FF8800)));
-    if !dock_test_mode() {
-        let _ = audio.lock().map(|mut a| a.start());
-    }
 
     let widget = Arc::new(WidgetSubsystem::new());
 
@@ -621,6 +618,16 @@ pub fn run() {
         .manage(widget_photo::PhotoUploads::default())
         .manage(desktop_wallpaper::Wallpapers::new())
         .setup(|app| {
+            let audio = app.state::<AppState>().audio.clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    let audio = audio.clone();
+                    let _ = tauri::async_runtime::spawn_blocking(move || {
+                        if let Ok(mut audio) = audio.lock() { audio.stop_if_idle(std::time::Duration::from_secs(3)); }
+                    }).await;
+                }
+            });
             let icon = Image::new(include_bytes!("../icons/icon.rgba"), 128, 128);
             if let Some(window) = app.get_webview_window("main") {
                 window.set_icon(icon.clone())?;
@@ -789,6 +796,8 @@ pub fn run() {
             desktop_wallpaper::wallpaper_add_preset,
             desktop_wallpaper::wallpaper_apply,
             desktop_wallpaper::wallpaper_options,
+            desktop_wallpaper::wallpaper_audio_options,
+            desktop_wallpaper::wallpaper_audio_error,
             desktop_wallpaper::wallpaper_scene_info,
             desktop_wallpaper::wallpaper_scene_options,
             desktop_wallpaper::wallpaper_performance_options,
@@ -803,6 +812,8 @@ pub fn run() {
             widget_photo::photo_upload_finish,
             desktop_widgets::get_widgets,
             desktop_widgets::set_widget,
+            desktop_widgets::audio_spectrum,
+            desktop_widgets::audio_widget_fullscreen,
             desktop_widgets::widget_stats,
             desktop_widgets::widget_media,
             desktop_widgets::widget_media_control,
@@ -827,10 +838,17 @@ pub fn run() {
             get_taskbar_preview_info,
             desktop_dock::get_dock_snapshot,
             desktop_dock::set_dock_config,
+            desktop_dock::get_dock_audio,
+            desktop_dock::set_dock_audio,
+            desktop_dock::dock_audio_error,
             desktop_dock::reset_desktop_dock,
             desktop_dock::dock_resize,
             desktop_dock::dock_activate,
             desktop_dock::dock_pin,
+            desktop_dock::dock_set_hidden,
+            desktop_dock::dock_open_system,
+            desktop_dock::dock_input_language,
+            desktop_dock::dock_languages,
             desktop_dock::dock_reorder,
             desktop_dock::dock_set_icon,
             desktop_dock::dock_open_studio,
