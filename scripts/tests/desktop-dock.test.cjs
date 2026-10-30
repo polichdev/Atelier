@@ -11,7 +11,7 @@ async function fixture(file){
   const page=await browser.newPage({viewport:{width:1100,height:800}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{
-    const c={enabled:true,position:'bottom',alignment:'center',monitor:0,icon_size:44,spacing:6,padding:10,edge_gap:10,radius:18,opacity:72,tint:'#232532',magnification:140,icon_style:'original',inactive_opacity:85,active_background:true,indicator:'dot',indicator_color:'#f3f0ea',show_labels:true,show_running:true,show_clock:false,auto_hide:false,hide_delay:700,hide_windows_taskbar:false,pinned:[{path:'alpha.exe',name:'Alpha'},{path:'beta.exe',name:'Beta'}],imported:true};
+    const c={enabled:true,position:'bottom',alignment:'center',monitor:0,icon_size:44,spacing:6,padding:10,edge_gap:10,radius:18,opacity:72,tint:'#232532',magnification:140,icon_style:'original',inactive_opacity:85,active_background:true,indicator:'dot',indicator_color:'#f3f0ea',show_labels:true,show_running:true,show_clock:false,show_start:true,show_search:true,show_studio:true,launch_animation:true,maximize_on_open:true,hidden_apps:[],auto_hide:false,hide_delay:700,hide_windows_taskbar:false,pinned:[{path:'alpha.exe',name:'Alpha'},{path:'beta.exe',name:'Beta'}],imported:true};
     const icon=color=>'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect x="4" y="4" width="56" height="56" rx="13" fill="${color}"/><circle cx="32" cy="32" r="15" fill="white" fill-opacity=".6"/></svg>`);
     window.__dockFixture={config:c,items:[{id:'alpha.exe',name:'Alpha',icon:icon('#428fe0'),pinned:true,running:true,active:true,windows:2},{id:'beta.exe',name:'Beta',icon:icon('#a774d6'),pinned:true,running:false,active:false,windows:0},{id:'gamma.exe',name:'Gamma',icon:'',pinned:false,running:true,active:false,windows:1}],calls:[],listeners:[],delay:0};
     const f=window.__dockFixture;
@@ -23,6 +23,8 @@ async function fixture(file){
       if(cmd==='set_dock_config'){if(f.delay)await new Promise(r=>setTimeout(r,f.delay));Object.assign(c,args.config);return structuredClone(c)}
       if(cmd==='dock_pin'){const item=f.items.find(i=>i.id===args.id);item.pinned=args.pinned;c.pinned=f.items.filter(i=>i.pinned).map(i=>({path:i.id,name:i.name}));return}
       if(cmd==='dock_reorder'){c.pinned=args.ids.map(id=>c.pinned.find(p=>p.path===id));f.items=[...args.ids.map(id=>f.items.find(i=>i.id===id)),...f.items.filter(i=>!i.pinned)];return}
+      if(cmd==='dock_set_hidden'){const item=f.items.find(i=>i.id===args.id);item.hidden=args.hidden;return}
+      if(cmd==='dock_open_system')return;
       if(cmd==='dock_set_icon'){const pin=c.pinned.find(p=>p.path===args.id);pin.icon=args.icon;const item=f.items.find(i=>i.id===args.id);item.icon=args.icon||icon('#428fe0');return}
       if(cmd==='reset_desktop_dock'){c.enabled=false;return structuredClone(c)}
       if(cmd==='get_taskbar_config')return structuredClone(f.native);
@@ -145,5 +147,16 @@ test('enabling and disabling the dock requests matching Windows taskbar visibili
   await page.waitForFunction(()=>!__dockFixture.config.enabled&&!__dockFixture.config.hide_windows_taskbar);
   await page.locator('#dd-enabled').check();
   await page.waitForFunction(()=>__dockFixture.config.enabled&&__dockFixture.config.hide_windows_taskbar);
+  assert.deepEqual(errors,[]);await page.close();
+});
+
+test('visibility buttons and launch animation settings update independently',async()=>{
+  const{page,errors}=await fixture('index.html');await page.waitForFunction(()=>document.getElementById('dd-status').textContent==='Desktop dock is on');
+  await page.getByRole('button',{name:'Hide Alpha',exact:true}).click();
+  await page.waitForFunction(()=>__dockFixture.items.find(i=>i.id==='alpha.exe').hidden===true);
+  await page.getByRole('button',{name:'Show Alpha',exact:true}).click();
+  await page.waitForFunction(()=>__dockFixture.items.find(i=>i.id==='alpha.exe').hidden===false);
+  await page.locator('#dd-launch_animation').uncheck();
+  await page.waitForFunction(()=>__dockFixture.config.launch_animation===false);
   assert.deepEqual(errors,[]);await page.close();
 });
