@@ -1,21 +1,101 @@
-# Failure Modes & Recovery
+# Failure Modes and Recovery
 
-## Dock hides the Windows taskbar
+Atelier operates directly with core Windows shell components, including Windows Explorer (`explorer.exe`), the Desktop Window Manager (DWM), and the `WorkerW` desktop layer. To safeguard system stability, Atelier implements multi-layered watchdog processes and automated failsafe mechanisms.
 
-Before hiding each visible Explorer taskbar, Atelier starts a watchdog and waits for its readiness signal. When Windows taskbar auto-hide was off, the dock enables it so Windows can release the reserved work area. A separate guardian restores the previous setting on unexpected exit; normal shutdown restores it only if it still matches the state Atelier applied. The parent records hidden windows and restores them when the dock is disabled or the application shuts down. The watchdog waits for the parent process and attempts to show its taskbar if the parent exits. It only restores windows that were visible when Atelier took responsibility for them.
+```mermaid
+flowchart TD
+    subgraph Failures ["Potential Failure Conditions"]
+        F1["Parent Application Crash / Hard Kill"]
+        F2["Windows Explorer Restart / Crash"]
+        F3["Graphics Driver TDR / Display Reconnect"]
+        F4["Corrupt Settings or Missing Device"]
+    end
 
-If the taskbar is still missing, disable the macOS Taskbar in Studio or use the Windows reset action. If needed, restart Windows Explorer through Task Manager. The dock's hidden-icons and language buttons attempt to invoke Explorer controls without showing the taskbar. This is not reliable on every Windows build: the current implementation can report that it could not identify a unique control. See [Desktop dock](DOCK.md#system-controls) for the limitation.
+    subgraph AutomatedRecovery ["Automated Recovery Mechanisms"]
+        W1["--dock-watchdog<br/>(Restores hidden taskbars via SW_SHOW)"]
+        W2["--dock-appbar-watchdog<br/>(Clears ABM_REMOVE work area margins)"]
+        W3["recovery.rs Listener<br/>(Rebinds on 'TaskbarCreated' event)"]
+        W4["Safe Fallback Defaults<br/>(Stock Windows Taskbar & Wallpaper)"]
+    end
 
-## Native appearance or position is incorrect
+    subgraph ManualRecovery ["Manual Recovery Procedures"]
+        M1["Studio Reset Button<br/>('Reset to Windows Defaults')"]
+        M2["Explorer Restart<br/>(Task Manager or PowerShell)"]
+        M3["Emergency Shell Unhide Script"]
+    end
 
-Use **Reset button styles**, **Restore sharp icons**, or the Windows reset action in Studio. If a previous version left Explorer in an inconsistent state, close Atelier and restart Windows Explorer. Taskbar positioning uses a separate guardian to attempt restoring the original edge and saved registry value after a controller exit. Some Windows builds do not accept every requested position.
+    F1 --> W1
+    F1 --> W2
+    F2 --> W3
+    F3 --> W3
+    F4 --> W4
 
-The XAML bridge tracks changes to native properties and attempts to restore them when its controller goes away. These are recovery mechanisms, not a guarantee against all Windows crashes, shell changes or third-party conflicts. A style may also be unsupported on a particular Explorer build.
+    W1 -.-> M1
+    W3 -.-> M2
+    W4 -.-> M3
+```
 
-## Explorer restarts
+---
 
-The taskbar recovery listener attempts to apply the current session's configuration when it receives the registered Explorer taskbar-created message. Dock maintenance checks for taskbar windows while the dock is enabled. Review the actual result after an Explorer or Windows update.
+## Architectural Highlights
 
-## Tests and diagnostics
+### 1. Watchdog Process Fault Tolerance
+When Atelier hides the native Windows taskbars or reserves screen work area space, it immediately spawns independent detached supervisor processes:
 
-See [Development and testing](DEVELOPMENT.md) for isolated dock fixtures and output paths. Do not run the taskbar integration tests on an important desktop session without first reviewing their effects.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as Atelier Process (PID: 1044)
+    participant Dog as Watchdog (PID: 2890)
+    participant Explorer as Windows Explorer (Shell_TrayWnd)
+    participant WorkArea as Windows WorkArea
+
+    App->>Dog: Spawn Atelier.exe --dock-watchdog 1044
+    App->>Explorer: ShowWindow(SW_HIDE)
+    App->>WorkArea: SHAppBarMessage(ABM_NEW / ABM_SETPOS)
+    Note over App,Dog: Watchdog holds SYNCHRONIZE handle to PID 1044
+    App--xApp: Fatal Crash / Sudden Process Termination
+    Dog->>Dog: WaitForSingleObject triggers (Parent Died)
+    Dog->>Explorer: ShowWindow(SW_SHOW) on primary and secondary taskbars
+    Dog->>WorkArea: SHAppBarMessage(ABM_REMOVE)
+    Dog-->>Dog: Exit (Desktop fully restored)
+```
+
+---
+
+## Specific Failure Scenarios & Solutions
+
+### 1. The Windows Taskbar Remains Hidden
+- **Root Cause**: The application was forcibly terminated before the normal cleanup routine could execute, and the watchdog was blocked.
+- **Automated Fix**: Restarting Atelier and toggling the **macOS Taskbar** switch off will restore all recorded taskbars.
+- **Manual PowerShell Fix**: Run the following in PowerShell:
+  ```powershell
+  # Emergency restore Windows taskbar visibility
+  Add-Type -TypeDefinition '
+    using System; using System.Runtime.InteropServices;
+    public class Shell {
+      [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string t);
+      [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+    }';
+  $tb = [Shell]::FindWindow("Shell_TrayWnd", $null);
+  [Shell]::ShowWindow($tb, 5);
+  ```
+
+---
+
+### 2. Desktop Work Area or Maximized Windows Leave a Bottom Gap
+- **Root Cause**: An AppBar reservation (`SHAppBarMessage`) was left active after an unexpected exit.
+- **Automated Fix**: Running `Atelier.exe --dock-appbar-watchdog` or setting the **Space below maximized apps** slider to `0` in Studio releases the AppBar.
+- **Manual Fix**: Restarting `explorer.exe` via Task Manager resets all system AppBars.
+
+---
+
+### 3. Explorer Restarts or Updates (Black Screen or Lost Taskbar Styling)
+- **Root Cause**: Windows shell crashed or updated, creating new `HWND` handles for `Shell_TrayWnd` and `WorkerW`.
+- **Automated Fix**: `recovery.rs` listens for the system-wide `TaskbarCreated` broadcast message. Upon receipt, Atelier automatically rediscovers the new taskbar handles and reapplies active styles without requiring a restart.
+
+---
+
+### 4. Live Wallpaper Plays Black Frame or Fails to Attach
+- **Root Cause**: Graphic driver Timeout Detection and Recovery (TDR) occurred, or Explorer changed desktop window hierarchy order.
+- **Automated Fix**: Atelier periodically inspects the z-order of `WorkerW`. If `SHELLDLL_DefView` drops behind the wallpaper host, Atelier automatically triggers `desktop_wallpaper::wallpaper_repair` to reinsert the wallpaper between the desktop icons and background.

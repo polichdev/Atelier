@@ -1,31 +1,99 @@
-# Configuration & Storage
+# Configuration and Storage Architecture
 
-## Data directory
+Atelier persists user preferences, widget coordinates, wallpaper libraries, and dock customizations in local, human-readable JSON files stored in the user's roaming application data directory.
 
-By default Studio uses `%APPDATA%\Atelier`. Set `ATELIER_DATA_DIR` before launching to choose another directory. The dock and XAML bridge have temporary-directory fallbacks in some paths when the normal data directory is unavailable.
+```mermaid
+flowchart LR
+    subgraph DiskStorage ["Persistent Disk Storage (%APPDATA%\Atelier)"]
+        S1["settings.json<br/>(Taskbar Styles & Appearance)"]
+        S2["dock-settings.json<br/>(Dock Layout, Pins, Audio Glow)"]
+        S3["widgets.json<br/>(Widget Positions & Configs)"]
+        S4["wallpapers/library.json<br/>(Imported Wallpaper Metadata)"]
+        S5["widget-photos/<br/>(Stored GIF/PNG Assets)"]
+    end
 
-| File | Purpose |
-| --- | --- |
-| `settings.json` | Taskbar configuration written after changes and resets. The Tauri application starts with default taskbar settings rather than reapplying this file at launch. |
-| `dock-settings.json` | Dock configuration, pinned paths, system-button visibility and optional custom icon data. Explicitly enabled dock settings may be restored at launch. |
-| `wallpapers/` | Local wallpaper library (`library.json`), imported video and scene files, per-wallpaper and global playback settings, and WebView data. |
-| `widgets.json` | Widget configuration, positions and enabled state, including the Audio visualizer. |
-| `widget-photos/` | Stored GIF assets for photo widgets. |
-| `cache/workshop-previews/` | Cached compositions for supported downloaded Workshop scenes. |
-| `atelier_xaml_<hash>.dll` | Extracted copy of the embedded XAML bridge, unless a matching copy is found beside the executable. |
+    subgraph MemoryModel ["In-Memory State Handlers (Tauri Managed State)"]
+        M1["AppState (atelier-ui)"]
+        M2["DockState (desktop_dock.rs)"]
+        M3["Widgets (desktop_widgets.rs)"]
+        M4["Wallpapers (desktop_wallpaper.rs)"]
+    end
 
-The dock imports existing pinned Windows taskbar shortcuts on first enable. It attempts to use the Windows taskbar order; if that data cannot be matched reliably, it falls back to filename order. An untouched alphabetical import from an earlier version is corrected when possible. Manually reordered pins and custom icons are preserved and remain independent of Explorer's shortcuts. Windows-managed apps that do not use shortcut files may not all be imported. Resetting Windows appearance from Studio also resets the dock settings.
+    subgraph Presentation ["Presentation & Runtime"]
+        W1["Mica Studio UI"]
+        W2["Floating Desktop Dock"]
+        W3["Overlay Widgets"]
+        W4["WorkerW Wallpaper Canvas"]
+    end
 
-Dock audio effects, hidden-app preferences and the maximized-window bottom gap are stored in `dock-settings.json`. Wallpaper audio effects are stored per wallpaper in the library configuration. These files can include local application paths, custom content and widget data; treat them as personal data when sharing diagnostics.
+    S1 <--> M1
+    S2 <--> M2
+    S3 <--> M3
+    S4 <--> M4
 
-## Environment variables
+    M1 --> W1
+    M2 --> W2
+    M3 --> W3
+    M4 --> W4
+```
 
-| Variable | Use |
-| --- | --- |
-| `ATELIER_DATA_DIR` | Override the application's data directory. |
-| `ATELIER_DOCK_ONLY_TEST` | Enable isolated dock test mode in debug builds. |
-| `ATELIER_DOCK_NATIVE_TEST` | Run the native dock script in debug test mode. |
-| `NODE_PATH` | Optional Node module lookup path for Playwright tests. |
-| `ATELIER_TEST_BROWSER` | Optional Playwright browser channel, such as `msedge`. |
+---
 
-The test variables are intended for development fixtures, not normal usage. Avoid manually editing settings while Atelier is running: a subsequent save can overwrite changes.
+## Storage Locations
+
+By default, Atelier uses `%APPDATA%\Atelier`. You can override this path by setting the `ATELIER_DATA_DIR` environment variable prior to launching the application.
+
+| File / Folder | Purpose | Format |
+| :--- | :--- | :--- |
+| `settings.json` | Native taskbar styling, accent policy, blur radius, and color presets. | JSON |
+| `dock-settings.json` | Dock edge, icon size, magnification, pinned shortcuts, AppBar gap, and audio glow. | JSON |
+| `widgets.json` | Grid coordinates, dimensions, enabled states, and visual presets for all desktop widgets. | JSON |
+| `wallpapers/` | Contains `library.json`, imported video/scene directories, and extracted PKG assets. | Directory |
+| `widget-photos/` | User-uploaded GIF and image assets displayed by the photo widget. | PNG / GIF |
+| `cache/workshop-previews/`| Pre-composed composite thumbnails for downloaded Steam Workshop scenes. | Cached PNG |
+| `atelier_xaml_<hash>.dll` | Extracted copy of the embedded C++20 XAML bridge DLL. | Native Binary |
+
+---
+
+## Schema Overview
+
+### 1. `dock-settings.json`
+```json
+{
+  "enabled": true,
+  "edge": "Bottom",
+  "alignment": "Center",
+  "icon_size": 48,
+  "magnification": 1.5,
+  "spacing": 8,
+  "padding": 10,
+  "corner_radius": 18,
+  "auto_hide": false,
+  "hide_delay_ms": 300,
+  "appbar_gap": 0,
+  "launch_animation": true,
+  "maximize_compatible": false,
+  "audio_glow": {
+    "enabled": true,
+    "color": "#38bdf8",
+    "strength": 0.8,
+    "frequency": "bass",
+    "shape": "breathing"
+  },
+  "pinned_apps": [
+    { "name": "File Explorer", "path": "explorer.exe", "custom_icon": null }
+  ]
+}
+```
+
+---
+
+## Environment Variables
+
+| Variable | Type | Description |
+| :--- | :--- | :--- |
+| `ATELIER_DATA_DIR` | Path | Overrides the root configuration and wallpaper storage directory. |
+| `ATELIER_DOCK_ONLY_TEST` | Boolean | Launches only the dock test fixture in isolated debug mode. |
+| `ATELIER_DOCK_NATIVE_TEST` | Boolean | Runs the native Windows taskbar automated test fixture. |
+| `NODE_PATH` | Path | Specifies custom Node module resolution paths for automated tests. |
+| `ATELIER_TEST_BROWSER` | String | Overrides the browser channel for Playwright tests (`msedge`, `chrome`). |

@@ -96,13 +96,13 @@ sequenceDiagram
 
 The engine is partitioned into specialized crates, each documented with its own standalone specification:
 
-- **[`crates/ui`](../crates/ui/README.md) (`atelier-ui`)**: The primary Tauri 2.0 application executable. Manages the Studio UI, secondary windows (dock, widgets, wallpaper host), custom URI protocols, and IPC handlers.
-- **[`crates/wallpaper`](../crates/wallpaper/README.md) (`atelier-wallpaper`)**: Low-level WorkerW desktop injection, Direct3D 11 rendering pipeline, Media Foundation video host, and Wallpaper Engine archive/texture decoders (`.pkg`, `.tex`).
-- **[`crates/taskbar`](../crates/taskbar/README.md) (`atelier-taskbar`)**: Native Explorer taskbar manipulation, Acrylic/Mica compositions, floating dock regions, and C++20 XAML visual tree injection bridge.
-- **[`crates/audio`](../crates/audio/README.md) (`atelier-audio`)**: Low-latency WASAPI loopback capture, Radix-2 FFT spectrum analysis with 64 logarithmic bands, and automatic on-demand idle management.
-- **[`crates/widget`](../crates/widget/README.md) (`atelier-widget`)**: Desktop overlay widget subsystem providing hardware metrics (CPU, GPU, RAM, VRAM), clock, calendar, weather, media, notes, and countdowns.
-- **[`crates/core`](../crates/core/README.md) (`atelier-core`)**: Background daemon and supervisor process orchestrating recovery watchdogs and native system tray hooks.
-- **[`crates/common`](../crates/common/README.md) (`atelier-common`)**: Shared types, configuration models, color normalization utilities, and unified error definitions.
+- **[`ui`](crates/UI.md) (`atelier-ui`)**: The primary Tauri 2.0 application executable. Manages the Studio UI, secondary windows (dock, widgets, wallpaper host), custom URI protocols, and IPC handlers.
+- **[`wallpaper`](crates/WALLPAPER.md) (`atelier-wallpaper`)**: Low-level WorkerW desktop injection, Direct3D 11 rendering pipeline, Media Foundation video host, and Wallpaper Engine archive/texture decoders (`.pkg`, `.tex`).
+- **[`taskbar`](crates/TASKBAR.md) (`atelier-taskbar`)**: Native Explorer taskbar manipulation, Acrylic/Mica compositions, floating dock regions, and C++20 XAML visual tree injection bridge.
+- **[`audio`](crates/AUDIO.md) (`atelier-audio`)**: Low-latency WASAPI loopback capture, Radix-2 FFT spectrum analysis with 64 logarithmic bands, and automatic on-demand idle management.
+- **[`widget`](crates/WIDGET.md) (`atelier-widget`)**: Desktop overlay widget subsystem providing hardware metrics (CPU, GPU, RAM, VRAM), clock, calendar, weather, media, notes, and countdowns.
+- **[`core`](crates/CORE.md) (`atelier-core`)**: Background daemon and supervisor process orchestrating recovery watchdogs and native system tray hooks.
+- **[`common`](crates/COMMON.md) (`atelier-common`)**: Shared types, configuration models, color normalization utilities, and unified error definitions.
 
 ---
 

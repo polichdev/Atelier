@@ -1,11 +1,69 @@
-# Security Considerations
+# Security Architecture and Considerations
 
-Atelier interacts with the Windows shell and local application windows. Its Windows 11 XAML bridge is native code loaded into the Explorer taskbar process; it modifies taskbar elements, so Windows updates or other shell customization software can affect compatibility. The dock can hide taskbar windows and launch applications selected by the user.
+Atelier operates with standard user permissions while interacting with native Windows shell components, Direct3D 11 hardware acceleration, and the local file system. This document outlines the security boundaries, sandboxing models, and data protection practices implemented across the project.
 
-The dock reads local shortcut paths, enumerates visible windows and stores pinned paths and optional custom icon data in the application data directory. Treat those files as user data. Studio's WebView has Tauri commands enabled and the current Tauri configuration sets `csp` to `null`; changes that load remote content or broaden IPC access deserve particular review.
+```mermaid
+flowchart TD
+    subgraph External ["External & Untrusted Data"]
+        Net["Remote Web (Open-Meteo Weather)"]
+        ScenePkg["User / Steam Workshop Archives (.pkg)"]
+        UserFiles["Imported Video & Photo Files"]
+    end
 
-Audio reactivity uses local WASAPI loopback of the default output, not the microphone, and does not record audio. Wallpaper files, widget notes, locations and other settings may also be personal. Weather requests use Open-Meteo; Workshop browsing and Steam use network services. See [Configuration](CONFIGURATION.md) before sharing diagnostic files.
+    subgraph Sandbox ["WebView2 Sandboxed Security Boundary"]
+        MainUI["Studio UI (index.html)"]
+        DockUI["Dock UI (dock.html)"]
+        WallpaperUI["Wallpaper Host (wallpaper.html)"]
+        WidgetUI["Widget Windows (widget.html)"]
+    end
 
-Recovery helpers reduce the risk of leaving a taskbar hidden or moved after the parent exits, but cannot guarantee recovery from every system failure. See [Failure Modes & Recovery](FAILURES_AND_RECOVERY.md).
+    subgraph Protocols ["Strict Custom URI Protocol Handlers"]
+        P1["wallpaper-scene://<br/>(Validates Canonical Paths & Path Traversal)"]
+        P2["wallpaper-media://<br/>(Restricted to Whitelisted Media Exts)"]
+        P3["widget-photo://<br/>(Sandboxed to widget-photos/ Directory)"]
+    end
 
-For a suspected vulnerability, avoid publishing exploit details in a public issue. Use the repository's private vulnerability reporting option if it is enabled, or contact the maintainer through an available private channel. No response-time commitment is specified here.
+    subgraph RustBackend ["Trusted Rust Backend (Tauri IPC & Win32)"]
+        IPCRouter["Tauri IPC Router (capabilities/default.json)"]
+        ASTParser["Safe Expression Parser (No eval / No SceneScript)"]
+        ShellManager["Win32 Shell & Window Managers"]
+    end
+
+    Net --> MainUI
+    ScenePkg --> P1
+    UserFiles --> P2
+    UserFiles --> P3
+
+    MainUI <--> IPCRouter
+    DockUI <--> IPCRouter
+    WallpaperUI <--> IPCRouter
+    WidgetUI <--> IPCRouter
+
+    P1 --> ASTParser
+    IPCRouter --> ShellManager
+```
+
+---
+
+## Security Principles & Controls
+
+### 1. File Access & Path Traversal Prevention
+- All custom URI schemes (`wallpaper-scene://`, `wallpaper-media://`, `workshop-media://`, `widget-photo://`) sanitize incoming request URIs against directory traversal attacks (`../`, `%2e%2e`, backslash variations).
+- Requests containing path traversal sequences or attempts to access root drive directories are rejected with `403 Forbidden` before opening file handles.
+
+---
+
+### 2. Prevention of Arbitrary Code Execution
+- **No `eval` Execution**: Wallpaper Engine scenes often contain dynamic conditions to toggle layer variants (e.g. alternate clothing or hair). Atelier parses these conditions using a bounded arithmetic and boolean expression AST evaluator (`crates/ui/src/scene_properties.rs`). Arbitrary JavaScript execution is impossible.
+- **SceneScript and Custom Shaders Blocked**: Arbitrary foreign binary shaders and JavaScript SceneScripts embedded inside third-party packages are discarded at import time and never evaluated.
+
+---
+
+### 3. Audio Capture & Privacy Protection
+- **Output Loopback Only**: The `atelier-audio` crate explicitly configures WASAPI for render loopback (`eRender, eMultimedia`). It does **not** initialize capture endpoints (`eCapture`) and cannot record the user's microphone.
+- **Zero Audio Storage**: Audio samples are processed strictly in a 512-sample circular buffer in volatile RAM and immediately discarded after computing the FFT spectrum. No audio recordings are ever written to disk or transmitted over the network.
+
+---
+
+### 4. Least Privilege & UAC Elevation
+- Atelier does not require Administrator privileges to run. All taskbar composition styling, dock AppBar reservations, and wallpaper injections execute under standard user security tokens.

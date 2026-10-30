@@ -1,43 +1,116 @@
-# Architecture & Data Flow
+# System Architecture and Data Flow
 
-## Overview
-
-Atelier is a Windows-focused Cargo workspace. The main user-facing process is the `Atelier` Tauri application in `atelier-ui`. Its embedded WebView communicates with Rust through Tauri commands and events. The application owns the taskbar manager, optional dock, wallpaper library and desktop widgets. The Audio tab configures a desktop visualizer that uses system output through the audio capture and analysis module.
+Atelier is an advanced Windows-focused desktop personalization engine built on a high-performance modular Cargo workspace. The primary user-facing process is the `Atelier` Tauri 2.0 application (`atelier-ui`).
 
 ```mermaid
 flowchart TB
-    UI["Studio WebView · index.html"] <-->|"Tauri IPC"| STATE["atelier-ui AppState"]
-    STATE --> MANAGER["TaskbarManager"]
-    MANAGER --> WIN32["Explorer windows · Win32 / DWM"]
-    MANAGER --> XAML["Rust loader + C++ XAML bridge"]
-    XAML --> WIN32
-    UI <--> DOCKSTATE["DockState"]
-    DOCKSTATE <--> DOCKVIEW["Dock WebView · dock.html"]
-    DOCKSTATE --> APPS["Windows shortcuts and app windows"]
-    DOCKSTATE --> GUARD["Visibility watchdog"]
-    MANAGER --> POSGUARD["Position guardian"]
-    STATE --> WALL["Wallpaper subsystem"]
-    STATE --> AUDIO["Audio subsystem"]
-    STATE --> WIDGET["Widget subsystem"]
+    subgraph FrontendLayer ["Presentation Layer (Tauri 2.0 & WebView2)"]
+        Studio["Studio Shell (index.html)<br/>Settings & Customization Panels"]
+        Dock["Desktop Dock (dock.html)<br/>Floating AppBar & App Launcher"]
+        Widgets["Overlay Widgets (widget.html)<br/>Movable Transparent Overlays"]
+        WallpaperHost["Wallpaper Host (wallpaper.html)<br/>Video & 2D Scene WebGL Player"]
+    end
+
+    subgraph StateLayer ["Application State Management (atelier-ui)"]
+        AppState["AppState<br/>(Taskbar, Audio Mutex)"]
+        DockState["DockState<br/>(Pins, Running Windows, AppBar)"]
+        WallState["Wallpapers<br/>(Profiles, Playback Rules)"]
+        WidgetState["Widgets<br/>(Coordinates, Visual Presets)"]
+    end
+
+    subgraph Subsystems ["Engine Subsystems"]
+        TaskbarEngine["atelier-taskbar<br/>(DWM Accents & XAML Bridge)"]
+        WallpaperEngine["atelier-wallpaper<br/>(WorkerW, D3D11, PKG Decoders)"]
+        AudioEngine["atelier-audio<br/>(WASAPI Capture & FFT Analyzer)"]
+        WidgetEngine["atelier-widget<br/>(PDH Hardware Metrics & SMTC)"]
+    end
+
+    subgraph OSIntegration ["Windows Operating System"]
+        Explorer["Windows Explorer (Shell_TrayWnd & Progman)"]
+        DWM["Desktop Window Manager (Composition & Acrylic)"]
+        AudioDev["Audio Render Endpoint (WASAPI Loopback)"]
+        Metrics["Windows Kernel (PDH / DXGI / SystemPower)"]
+    end
+
+    Studio <--> AppState
+    Dock <--> DockState
+    Widgets <--> WidgetState
+    WallpaperHost <--> WallState
+
+    AppState --> TaskbarEngine
+    DockState --> TaskbarEngine
+    WallState --> WallpaperEngine
+    WidgetState --> WidgetEngine
+    AppState --> AudioEngine
+    DockState --> AudioEngine
+    WallState --> AudioEngine
+
+    TaskbarEngine --> Explorer
+    TaskbarEngine --> DWM
+    WallpaperEngine --> Explorer
+    AudioEngine --> AudioDev
+    WidgetEngine --> Metrics
 ```
 
-## Startup and shutdown
+---
 
-1. `crates/ui/src/main.rs` handles helper-process and debug fixture arguments before starting the UI.
-2. `crates/ui/src/lib.rs` constructs a default taskbar manager and starts its Explorer recovery listener. Saved taskbar styling is not automatically applied at startup.
-3. The app attempts to initialize wallpaper and audio, creates the widget subsystem, opens the Tauri window and tray, and starts the dock from its saved settings.
-4. Closing the main window or selecting Quit shuts down the dock, restores taskbar changes through the manager, and exits. The tray can also request a Windows reset.
+## Application Startup and Shutdown Flow
 
-The `atelier-core` binary is a separate experimental daemon with its own initialization and tray. It applies its own initial taskbar configuration and opens Studio HTML without Tauri IPC. Do not assume it is a separate service required by the Tauri application.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Main as main.rs
+    participant App as lib.rs (Tauri Builder)
+    participant Dock as desktop_dock
+    participant Wall as desktop_wallpaper
+    participant Watch as Watchdog Process
+    participant Win as Windows Explorer
 
-## Taskbar path
+    Main->>App: Parse CLI flags (Normal vs Watchdog mode)
+    App->>App: Register custom URI protocols (wallpaper-media, wallpaper-scene)
+    App->>Dock: Initialize DockState & verify saved configuration
+    alt Dock is Enabled in Saved Settings
+        Dock->>Watch: Spawn detached --dock-watchdog guardian
+        Dock->>Win: Register AppBar & hide native taskbars
+        Dock->>App: Open desktop-dock window
+    end
+    App->>Wall: Restore active wallpaper into WorkerW
+    App->>App: Spawn background idle audio watcher
+    App->>App: Open Mica Studio main window & Tray icon
 
-UI changes invoke commands in `atelier-ui`, which normalize configuration and call `TaskbarManager`. The manager discovers primary and secondary Explorer taskbar windows, applies composition and optional region geometry, and uses the XAML bridge for supported Windows 11 elements. The bridge is compiled from C++, embedded into the executable and extracted when needed. An Explorer-created listener attempts to reapply the current session's modifications. Restoration and OS-version constraints are described in [Recovery](FAILURES_AND_RECOVERY.md) and [Compatibility](COMPATIBILITY.md).
+    Note over Main,Win: Application Running (User Interactive)
 
-## Dock path
+    opt Graceful Application Exit
+        App->>Dock: dock_state.shutdown() (Deregister AppBar & restore taskbars)
+        App->>Wall: desktop_background::shutdown() (Restore stock wallpaper)
+        App->>Watch: Signal clean exit
+        App->>Main: Exit cleanly (0)
+    end
+```
 
-`DockState` owns persisted settings, cached icons and the list of taskbar windows it hid. `dock.html` and `dock.js` display the separate Tauri window; Studio uses `studio-dock.js` for controls. The backend enumerates shortcuts and windows, resolves icons and launches or activates applications. A watchdog must acknowledge readiness before each visible Explorer taskbar is hidden. A separate guardian handles the temporary taskbar auto-hide state, and an optional appbar reserves the configured maximized-window gap. Fullscreen detection controls dock visibility on its selected monitor. Turning off the dock restores the windows that Atelier recorded as visible. The native hidden-icons and input-language controls may not be accessible while Explorer's taskbar is hidden.
+---
 
-## Supporting subsystems
+## Subsystem Interaction Paths
 
-Studio provides a local wallpaper library, video and partial 2D scene playback, discovery and import of items downloaded by Steam, and desktop widget controls. The Tauri-side implementations are in `atelier-ui`; `atelier-wallpaper` supplies desktop hosting and format handling, and `atelier-widget` supplies widget data and window infrastructure. `atelier-audio` supplies shared WASAPI loopback capture and spectrum analysis for the desktop visualizer and optional wallpaper and dock effects. See the [crate references](STRUCTURE.md#crate-reference), [Wallpapers and Workshop](WALLPAPERS.md) and [Audio reactivity](AUDIO_REACTIVITY.md).
+### 1. Taskbar Styling Path
+1. UI actions dispatch Tauri commands (`set_taskbar_style`, `reset_desktop_dock`).
+2. `TaskbarManager` resolves target `HWND` handles for `Shell_TrayWnd` across all connected displays.
+3. Invokes `SetWindowCompositionAttribute` for DWM acrylic/blur and loads `atelier_xaml.dll` on Windows 11 to modify modern visual tree elements safely.
+4. `recovery.rs` registers for `TaskbarCreated` to guarantee automatic recovery if Explorer restarts.
+
+---
+
+### 2. Live Wallpaper Path
+1. The user selects a video or scene wallpaper in Studio.
+2. `desktop_wallpaper.rs` invokes `acquire_workerw()` to locate the desktop background window layer beneath desktop icons.
+3. Sets the wallpaper WebView window parent to `WorkerW` using `SetParent`.
+4. The WebView loads assets via `wallpaper-media://` (HTTP range streaming) or `wallpaper-scene://` (on-the-fly PKG archive decompression).
+5. `wallpaper_performance.rs` monitors fullscreen window events and battery power to pause rendering when appropriate.
+
+---
+
+### 3. Audio Reactivity Path
+1. When the desktop visualizer, dock glow, or wallpaper pulse is active, the consumer calls `request_spectrum()`.
+2. `atelier-audio` initializes a WASAPI loopback capture thread on the default audio endpoint.
+3. Samples pass through a Hanning window and Radix-2 FFT, mapping 512 frequency samples into 64 musical logarithmic bands.
+4. If all consumers are closed or silent for 3 consecutive seconds, the worker thread automatically suspends (0% CPU).

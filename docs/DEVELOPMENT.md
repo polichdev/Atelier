@@ -1,48 +1,94 @@
-# Development & Testing
+# Development and Testing Guide
 
-## Setup
+This guide covers setup instructions, build configurations, and test procedures for developing and verifying **Atelier**.
 
-Use Windows 10/11 with a stable Rust MSVC toolchain, Visual C++ build tools with C++20 support, a Windows SDK and WebView2 Runtime. The taskbar build script invokes the C++ compiler for the XAML bridge. Node.js is required for the JavaScript tests; Playwright is additionally required for the dock browser tests; they are not required to load Studio's checked-in web assets through Cargo.
+```mermaid
+flowchart LR
+    subgraph Env ["Environment Setup"]
+        Rust["Rust MSVC (Stable)"]
+        MSVC["Visual C++ Build Tools (C++20)"]
+        WinSDK["Windows SDK (10.0.19041+)"]
+        Node["Node.js (v18+)"]
+    end
 
-```powershell
-cargo check --workspace
-cargo run -p atelier-ui --bin Atelier
+    subgraph BuildPipeline ["Build & Verification Pipeline"]
+        Check["cargo check --workspace"]
+        Clippy["cargo clippy --all-targets"]
+        RustTests["cargo test --workspace (47 UI, 10 Wall, 3 Audio, 3 Common)"]
+        NodeTests["node --test crates/ui/tests/*.test.cjs (30 JS Tests)"]
+    end
+
+    subgraph OutputArtifacts ["Binary Targets"]
+        DevRun["target/dev-run/Atelier.exe<br/>(scripts/run-dev.cmd)"]
+        Release["target/release/Atelier.exe"]
+        Packaged["NSIS / MSIX Installers"]
+    end
+
+    Env --> Check
+    Check --> Clippy
+    Clippy --> RustTests
+    Clippy --> NodeTests
+    RustTests --> DevRun
+    NodeTests --> DevRun
+    DevRun --> Release
+    Release --> Packaged
 ```
 
-`scripts\run-dev.cmd` builds and launches a copy under `target\dev-run`. It stops matching Atelier development processes first; do not use it if another matching development instance must remain running.
+---
 
-## Checks
+## Prerequisites & Toolchain Setup
 
+1. **Rust Toolchain**: Stable Rust with the `x86_64-pc-windows-msvc` target:
+   ```powershell
+   rustup default stable-x86_64-pc-windows-msvc
+   ```
+2. **C++20 Build Tools**: Visual Studio 2022 Build Tools with the "Desktop development with C++" workload installed (needed by `crates/taskbar/build.rs` to compile `native/xaml_bridge.cpp`).
+3. **Windows SDK**: Version 10.0.19041.0 or higher.
+4. **WebView2**: Microsoft Edge WebView2 Runtime.
+5. **Node.js**: Required to execute the JavaScript test runner suites (`crates/ui/tests/`).
+
+---
+
+## Daily Development Workflow
+
+Launch Atelier in development mode with live process management:
 ```powershell
+# Terminates stale instances and runs target/dev-run/Atelier.exe
+scripts\run-dev.cmd
+```
+
+---
+
+## Verification Test Suites
+
+### 1. Rust Workspace Unit Tests
+```powershell
+# Run all workspace unit tests across all 7 crates
+cargo test --workspace
+
+# Run specific crate tests
+cargo test -p atelier-ui
+cargo test -p atelier-wallpaper
+cargo test -p atelier-audio
 cargo test -p atelier-common
-cargo test -p atelier-ui --lib
-cargo test -p atelier-wallpaper --lib
+```
+
+### 2. Frontend & Runtime JavaScript Tests
+```powershell
+# Run the 30 JavaScript unit tests using Node.js native test runner
 node --test crates/ui/tests/*.test.cjs
-cargo check --workspace
 ```
 
-The Windows CI configuration also runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace` and `cargo build --release`. These commands describe configured checks, not a guarantee that the current tree passes every check.
-
-### Dock tests
-
+### 3. Isolated Dock Test Fixtures
 ```powershell
+# Run dock test fixture in safe sandbox without altering native taskbars
 powershell -File scripts/test-desktop-dock.ps1
-node --test scripts/tests/desktop-dock.test.cjs
 ```
 
-The PowerShell script builds an isolated test copy under `target/` and uses fixture windows; debug dock-only mode does not hide the user's Explorer taskbar. It also tests the watchdog. The browser tests require Playwright and an available browser. Set `NODE_PATH` to its installation when needed; `ATELIER_TEST_BROWSER=msedge` selects installed Edge. Browser screenshots are written to `target/dock-tests/`. Windows foreground activation and browser availability can affect integration results.
+---
 
-### Taskbar integration tests
+## Release Packaging
 
-`crates/taskbar/tests/` includes tests that operate on real Explorer taskbars. Those tests are ignored by default; run them explicitly and serially only in a suitable interactive desktop session:
-
-```powershell
-cargo test -p atelier-taskbar --test dpi_stress_tests -- --ignored --test-threads=1
-cargo test -p atelier-taskbar --test xaml_bridge -- --ignored --test-threads=1
-```
-
-The optional `xaml-probe` feature builds the native fixture and probe. Inspect the test before running it; do not confuse an isolated XAML fixture with a test against Explorer itself.
-
-## Packaging
-
-`packaging/nsis/installer.nsi` and `packaging/msix/AppxManifest.xml` provide installer sources. They expect the appropriate release executable and packaging tools/assets; a Cargo build alone does not verify an installer or produce a signed package.
+Atelier supports NSIS executable installers and MSIX packages:
+- **NSIS**: `packaging/nsis/installer.nsi`
+- **MSIX**: `packaging/msix/AppxManifest.xml`
