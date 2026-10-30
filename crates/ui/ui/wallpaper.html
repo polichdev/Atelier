@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0;border:0;outline:none}
+html,body{position:fixed;inset:0;width:100%;height:100%;margin:0;padding:0;overflow:hidden!important;background:#000;user-select:none;-webkit-user-select:none}
+::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+video,.scene{position:fixed;inset:0;width:100%;height:100%;border:0;outline:none}
+video{object-fit:cover}
+.scene{display:none;overflow:hidden;background:#15182d}
+.scene:before,.scene:after{content:"";position:absolute;inset:-30%;filter:blur(70px);animation:drift 22s ease-in-out infinite alternate}
+.scene:after{animation-direction:alternate-reverse;animation-duration:29s;opacity:.8}
+.scene.aurora{background:#081a31}
+.scene.aurora:before{background:radial-gradient(ellipse at 35% 35%,#14bd9d88,transparent 50%),radial-gradient(ellipse at 70% 30%,#4a57edaa,transparent 48%)}
+.scene.aurora:after{background:radial-gradient(ellipse at 40% 60%,#25d2b388,transparent 50%)}
+.scene.nebula{background:#090b22}
+.scene.nebula:before{background:radial-gradient(ellipse at 30% 50%,#8e3dc1aa,transparent 50%),radial-gradient(ellipse at 70% 30%,#355ec8aa,transparent 45%)}
+.scene.nebula:after{background:radial-gradient(ellipse at 60% 60%,#ec658077,transparent 50%)}
+.scene.sunset{background:#401741}
+.scene.sunset:before{background:radial-gradient(ellipse at 25% 40%,#fa8e3daa,transparent 50%),radial-gradient(ellipse at 70% 70%,#d83487aa,transparent 45%)}
+.scene.sunset:after{background:radial-gradient(ellipse at 60% 30%,#ffca6e99,transparent 50%)}
+.scene.ocean{background:#07334a}
+.scene.ocean:before{background:radial-gradient(ellipse at 25% 45%,#009db4aa,transparent 50%),radial-gradient(ellipse at 70% 60%,#2859a8aa,transparent 50%)}
+.scene.ocean:after{background:radial-gradient(ellipse at 50% 20%,#88e9d788,transparent 50%)}
+.paused:before,.paused:after{animation-play-state:paused}
+@keyframes drift{from{transform:translate(-8%,-4%) rotate(-6deg) scale(1)}to{transform:translate(8%,5%) rotate(8deg) scale(1.15)}}
+.scene.native:before,.scene.native:after{display:none}.scene.native{background:#000}.scene canvas{display:block;width:100%;height:100%}
+</style></head><body><video id="video" muted loop playsinline></video><div id="scene" class="scene"></div><script src="scene-properties.js"></script><script src="scene-player.js"></script><script src="wallpaper.js"></script></body></html>

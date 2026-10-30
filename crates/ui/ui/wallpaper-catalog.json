@@ -1,0 +1,6 @@
+[
+  {"id":"preset-aurora","title":"Aurora","category":"Nature","kind":"preset","description":"Flowing northern lights"},
+  {"id":"preset-nebula","title":"Nebula","category":"Space","kind":"preset","description":"Slow drifting cosmic light"},
+  {"id":"preset-sunset","title":"Sunset","category":"Abstract","kind":"preset","description":"Warm colors in motion"},
+  {"id":"preset-ocean","title":"Ocean","category":"Nature","kind":"preset","description":"Gentle ocean tones"}
+]
