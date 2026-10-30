@@ -2,7 +2,7 @@
 
 ## Overview
 
-Atelier is a Windows-focused Cargo workspace. The main user-facing process is the `Atelier` Tauri application in `atelier-ui`. Its embedded WebView communicates with Rust through Tauri commands and events. The application owns the taskbar manager, optional dock, wallpaper library and desktop widgets. Audio capture and analysis exist, while Studio audio visualization controls remain in development.
+Atelier is a Windows-focused Cargo workspace. The main user-facing process is the `Atelier` Tauri application in `atelier-ui`. Its embedded WebView communicates with Rust through Tauri commands and events. The application owns the taskbar manager, optional dock, wallpaper library and desktop widgets. The Audio tab configures a desktop visualizer that uses system output through the audio capture and analysis module.
 
 ```mermaid
 flowchart TB
@@ -36,8 +36,8 @@ UI changes invoke commands in `atelier-ui`, which normalize configuration and ca
 
 ## Dock path
 
-`DockState` owns persisted settings, cached icons and the list of taskbar windows it hid. `dock.html` and `dock.js` display the separate Tauri window; Studio uses `studio-dock.js` for controls. The backend enumerates shortcuts and windows, resolves icons and launches or activates applications. A watchdog must acknowledge readiness before each visible Explorer taskbar is hidden. Turning off the dock restores the windows that Atelier recorded as visible.
+`DockState` owns persisted settings, cached icons and the list of taskbar windows it hid. `dock.html` and `dock.js` display the separate Tauri window; Studio uses `studio-dock.js` for controls. The backend enumerates shortcuts and windows, resolves icons and launches or activates applications. A watchdog must acknowledge readiness before each visible Explorer taskbar is hidden. A separate guardian handles the temporary taskbar auto-hide state, and an optional appbar reserves the configured maximized-window gap. Fullscreen detection controls dock visibility on its selected monitor. Turning off the dock restores the windows that Atelier recorded as visible. The native hidden-icons and input-language controls may not be accessible while Explorer's taskbar is hidden.
 
 ## Supporting subsystems
 
-Studio provides a local wallpaper library, video and partial 2D scene playback, discovery and import of items downloaded by Steam, and desktop widget controls. The Tauri-side implementations are in `atelier-ui`; `atelier-wallpaper` supplies desktop hosting and format handling, and `atelier-widget` supplies widget data and window infrastructure. `atelier-audio` contains WASAPI capture and spectrum analysis, but its visualization controls are not yet available in Studio. See the [crate references](STRUCTURE.md#crate-reference) and [Scene playback](SCENE_PLAYBACK.md).
+Studio provides a local wallpaper library, video and partial 2D scene playback, discovery and import of items downloaded by Steam, and desktop widget controls. The Tauri-side implementations are in `atelier-ui`; `atelier-wallpaper` supplies desktop hosting and format handling, and `atelier-widget` supplies widget data and window infrastructure. `atelier-audio` supplies shared WASAPI loopback capture and spectrum analysis for the desktop visualizer and optional wallpaper and dock effects. See the [crate references](STRUCTURE.md#crate-reference), [Wallpapers and Workshop](WALLPAPERS.md) and [Audio reactivity](AUDIO_REACTIVITY.md).

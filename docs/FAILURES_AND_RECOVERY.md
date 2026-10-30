@@ -2,9 +2,9 @@
 
 ## Dock hides the Windows taskbar
 
-Before hiding each visible Explorer taskbar, Atelier starts a watchdog and waits for its readiness signal. The parent records hidden windows and restores them when the dock is disabled or the application shuts down. The watchdog waits for the parent process and attempts to show its taskbar if the parent exits. It only restores windows that were visible when Atelier took responsibility for them.
+Before hiding each visible Explorer taskbar, Atelier starts a watchdog and waits for its readiness signal. When Windows taskbar auto-hide was off, the dock enables it so Windows can release the reserved work area. A separate guardian restores the previous setting on unexpected exit; normal shutdown restores it only if it still matches the state Atelier applied. The parent records hidden windows and restores them when the dock is disabled or the application shuts down. The watchdog waits for the parent process and attempts to show its taskbar if the parent exits. It only restores windows that were visible when Atelier took responsibility for them.
 
-If the taskbar is still missing, disable the macOS Taskbar in Studio or use the Windows reset action. If needed, restart Windows Explorer through Task Manager. The dock does not reproduce the native notification area, so disabling it is necessary to access that area.
+If the taskbar is still missing, disable the macOS Taskbar in Studio or use the Windows reset action. If needed, restart Windows Explorer through Task Manager. The dock's hidden-icons and language buttons attempt to invoke Explorer controls without showing the taskbar. This is not reliable on every Windows build: the current implementation can report that it could not identify a unique control. See [Desktop dock](DOCK.md#system-controls) for the limitation.
 
 ## Native appearance or position is incorrect
 

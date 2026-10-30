@@ -16,17 +16,17 @@
 [![Recovery](https://img.shields.io/badge/Shell-Recovery%20Helpers-22A06B)](docs/FAILURES_AND_RECOVERY.md)
 [![Live wallpapers](https://img.shields.io/badge/Wallpapers-Video%20%26%20Scenes-8B5CF6)](docs/SCENE_PLAYBACK.md)
 
-Atelier is a Windows desktop customization project built with Rust and Tauri v2. Its Studio customizes the Explorer taskbar, provides an optional separate dock, plays live wallpapers and manages desktop widgets. Audio visualization controls are still in development.
+Atelier is a Windows desktop customization project built with Rust and Tauri v2. Its Studio customizes the Explorer taskbar, provides an optional separate dock, plays live wallpapers and manages desktop widgets. The Audio tab provides a desktop visualizer that reacts to system audio.
 
 ## Features
 
 - **Windows Taskbar:** configure materials, floating geometry and presets. On supported Windows 11 XAML taskbars, adjust app button and icon appearance.
-- **macOS Taskbar:** a separate dock for pinned shortcuts and running windows, with display and edge selection, sizing, layouts, indicators and auto-hide. Enabling it hides the native Windows taskbar, including the notification area.
+- **macOS Taskbar:** a separate dock for pinned shortcuts and running windows, with display and edge selection, appearance controls, per-app visibility, auto-hide and a configurable gap below maximized windows. It hides the native Windows taskbar while enabled and hides itself when a fullscreen app is active on its display. Some native tray and language controls are not reliably accessible while the taskbar is hidden; see [Desktop dock](docs/DOCK.md).
 - **Recovery:** the dock uses a helper process before hiding Explorer windows; native taskbar positioning has a separate guardian. See [Failure Modes & Recovery](docs/FAILURES_AND_RECOVERY.md).
-- **Wallpapers:** import MP4/WebM files, apply and manage them in a local library, and configure playback and scene quality. The Workshop tab discovers Wallpaper Engine items already downloaded by Steam; browse the Workshop, subscribe in Steam, refresh, then import a supported video or 2D scene. Atelier does not download Workshop items directly.
+- **Wallpapers:** import MP4/WebM files, apply and manage them in a local library, and configure playback and scene quality. The Workshop tab discovers Wallpaper Engine items already downloaded by Steam; browse the Workshop, subscribe in Steam, refresh, then import a supported video or 2D scene. Atelier does not download Workshop items directly. See [Wallpapers and Workshop](docs/WALLPAPERS.md).
 - **Scenes:** play supported 2D Wallpaper Engine scenes with per-wallpaper and author-provided controls. Compatibility is partial: custom shaders, SceneScript, 3D models and some effects and animations are not supported. See [Scene playback](docs/SCENE_PLAYBACK.md).
 - **Widgets:** configure desktop clock, calendar, system, media, battery, notes, weather, photo and countdown widgets.
-- **Audio:** capture and analysis infrastructure is present; Studio's audio visualization controls are still in development.
+- **Audio reactivity:** add a movable desktop visualizer with bars, wave, dots, circle or a symmetric wave. Customize its colors, glow, transparent background, size, sensitivity and smoothing; it responds to the default system output. Optional pulse and glow effects can also be enabled per wallpaper, and the desktop dock can react with glow and shape changes. See [Audio reactivity](docs/AUDIO_REACTIVITY.md).
 
 ## Architecture
 
@@ -53,6 +53,10 @@ The Tauri application is the primary Studio entry point. The separate `atelier-c
 
 ### Guides and architecture
 
+- [Documentation index](docs/README.md)
+- [Desktop dock](docs/DOCK.md)
+- [Wallpapers and Workshop](docs/WALLPAPERS.md)
+- [Audio reactivity](docs/AUDIO_REACTIVITY.md)
 - [Architecture and data flow](docs/ARCHITECTURE.md)
 - [Repository structure](docs/STRUCTURE.md)
 - [Configuration and storage](docs/CONFIGURATION.md)

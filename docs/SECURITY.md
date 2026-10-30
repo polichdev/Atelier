@@ -4,6 +4,8 @@ Atelier interacts with the Windows shell and local application windows. Its Wind
 
 The dock reads local shortcut paths, enumerates visible windows and stores pinned paths and optional custom icon data in the application data directory. Treat those files as user data. Studio's WebView has Tauri commands enabled and the current Tauri configuration sets `csp` to `null`; changes that load remote content or broaden IPC access deserve particular review.
 
+Audio reactivity uses local WASAPI loopback of the default output, not the microphone, and does not record audio. Wallpaper files, widget notes, locations and other settings may also be personal. Weather requests use Open-Meteo; Workshop browsing and Steam use network services. See [Configuration](CONFIGURATION.md) before sharing diagnostic files.
+
 Recovery helpers reduce the risk of leaving a taskbar hidden or moved after the parent exits, but cannot guarantee recovery from every system failure. See [Failure Modes & Recovery](FAILURES_AND_RECOVERY.md).
 
 For a suspected vulnerability, avoid publishing exploit details in a public issue. Use the repository's private vulnerability reporting option if it is enabled, or contact the maintainer through an available private channel. No response-time commitment is specified here.

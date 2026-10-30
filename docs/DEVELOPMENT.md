@@ -16,6 +16,8 @@ cargo run -p atelier-ui --bin Atelier
 ```powershell
 cargo test -p atelier-common
 cargo test -p atelier-ui --lib
+cargo test -p atelier-wallpaper --lib
+node --test crates/ui/tests/*.test.cjs
 cargo check --workspace
 ```
 

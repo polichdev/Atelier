@@ -8,6 +8,8 @@
 | Floating Windows taskbar | Region geometry supports horizontal taskbars. Its inset is bounded to leave at least 700 px where the display permits. |
 | Native taskbar position | Explorer may reject a requested edge on a particular Windows build; the controller reports failure and attempts restoration. |
 | macOS Taskbar | A separate Atelier dock; it is not the macOS Dock. Enabling it hides the Windows taskbar, including its notification area. |
+| Dock system controls | Start, Search, Quick Settings and the notification center use Windows shortcuts. Opening hidden tray icons and the input-language flyout through a hidden taskbar is not reliable on all Windows versions and may fail. |
+| Fullscreen detection | Dock hiding and wallpaper pause use Windows foreground/fullscreen detection. Behavior depends on the game's display mode, focus and monitor; test on the intended setup. |
 | Studio backdrop | The Studio requests Windows 11 Mica; the result depends on OS and transparency settings. |
 | Build | Windows MSVC, Windows SDK, C++ compiler and WebView2 are required for the normal desktop build. |
 
