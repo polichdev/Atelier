@@ -8,6 +8,10 @@ By default Studio uses `%APPDATA%\Atelier`. Set `ATELIER_DATA_DIR` before launch
 | --- | --- |
 | `settings.json` | Taskbar configuration written after changes and resets. The Tauri application starts with default taskbar settings rather than reapplying this file at launch. |
 | `dock-settings.json` | Dock configuration, pinned paths and optional custom icon data. Explicitly enabled dock settings may be restored at launch. |
+| `wallpapers/` | Local wallpaper library, imported video and scene files, playback settings and WebView data. |
+| `widgets.json` | Widget configuration, positions and enabled state. |
+| `widget-photos/` | Stored GIF assets for photo widgets. |
+| `cache/workshop-previews/` | Cached compositions for supported downloaded Workshop scenes. |
 | `atelier_xaml_<hash>.dll` | Extracted copy of the embedded XAML bridge, unless a matching copy is found beside the executable. |
 
 The dock imports existing pinned Windows taskbar shortcuts on first enable. Its saved pin order and custom icons are independent of Explorer's original shortcuts. Resetting Windows appearance from Studio also resets the dock settings.

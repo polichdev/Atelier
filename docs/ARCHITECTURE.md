@@ -2,7 +2,7 @@
 
 ## Overview
 
-Atelier is a Windows-focused Cargo workspace. The main user-facing process is the `Atelier` Tauri application in `atelier-ui`. Its embedded WebView communicates with Rust through Tauri commands and events. The application owns the taskbar manager, the optional dock and the initialized wallpaper, audio and widget subsystems. Some subsystems have no complete Studio workflow yet.
+Atelier is a Windows-focused Cargo workspace. The main user-facing process is the `Atelier` Tauri application in `atelier-ui`. Its embedded WebView communicates with Rust through Tauri commands and events. The application owns the taskbar manager, optional dock, wallpaper library and desktop widgets. Audio capture and analysis exist, while Studio audio visualization controls remain in development.
 
 ```mermaid
 flowchart TB
@@ -40,4 +40,4 @@ UI changes invoke commands in `atelier-ui`, which normalize configuration and ca
 
 ## Supporting subsystems
 
-`atelier-wallpaper` contains WorkerW, Direct3D and Media Foundation infrastructure; `atelier-audio` contains WASAPI capture and spectrum analysis; `atelier-widget` contains clock, hardware, media and window code. These modules are initialized or referenced by Studio but their complete controls are not exposed as finished features. See the [crate references](STRUCTURE.md#crate-reference).
+Studio provides a local wallpaper library, video and partial 2D scene playback, discovery and import of items downloaded by Steam, and desktop widget controls. The Tauri-side implementations are in `atelier-ui`; `atelier-wallpaper` supplies desktop hosting and format handling, and `atelier-widget` supplies widget data and window infrastructure. `atelier-audio` contains WASAPI capture and spectrum analysis, but its visualization controls are not yet available in Studio. See the [crate references](STRUCTURE.md#crate-reference) and [Scene playback](SCENE_PLAYBACK.md).

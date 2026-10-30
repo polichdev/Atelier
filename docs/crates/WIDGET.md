@@ -2,4 +2,4 @@
 
 Directory: [`crates/widget`](../../crates/widget/) · Cargo package: `atelier-widget`
 
-The crate contains clock, hardware statistics, media and layered-window modules. `WidgetSubsystem` exposes polling and overlay window construction. Studio creates the subsystem, but its Widgets tab is a placeholder and does not provide a complete widget configuration workflow.
+The crate contains clock, hardware statistics, media and layered-window modules. `WidgetSubsystem` exposes polling and overlay window construction. Studio's Widgets tab manages clock, calendar, system, media, battery, notes, weather, photo and countdown widgets. The Tauri-side implementation in `crates/ui/src/desktop_widgets.rs` creates and configures the desktop widget windows; `studio-widgets.js` provides their Studio controls. Weather uses Open-Meteo, and widget settings and photo assets are stored locally. See [Configuration](../CONFIGURATION.md).

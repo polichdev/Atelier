@@ -14,16 +14,19 @@
 [![Desktop dock](https://img.shields.io/badge/macOS%20Taskbar-Desktop%20Dock-8B5CF6)](#features)
 [![Multi-monitor](https://img.shields.io/badge/Dock-Multi--monitor-14B8A6)](docs/crates/UI.md)
 [![Recovery](https://img.shields.io/badge/Shell-Recovery%20Helpers-22A06B)](docs/FAILURES_AND_RECOVERY.md)
-[![In development](https://img.shields.io/badge/Wallpaper%20%2F%20Audio%20%2F%20Widgets-In%20Development-D97706)](#features)
+[![Live wallpapers](https://img.shields.io/badge/Wallpapers-Video%20%26%20Scenes-8B5CF6)](docs/SCENE_PLAYBACK.md)
 
-Atelier is a Windows desktop customization project built with Rust and Tauri v2. Its Studio can customize the Explorer taskbar and provide an optional, separate macOS-style dock. Wallpaper, audio and widget subsystems exist in the workspace, but their Studio controls are still in development.
+Atelier is a Windows desktop customization project built with Rust and Tauri v2. Its Studio customizes the Explorer taskbar, provides an optional separate dock, plays live wallpapers and manages desktop widgets. Audio visualization controls are still in development.
 
 ## Features
 
 - **Windows Taskbar:** configure materials, floating geometry and presets. On supported Windows 11 XAML taskbars, adjust app button and icon appearance.
 - **macOS Taskbar:** a separate dock for pinned shortcuts and running windows, with display and edge selection, sizing, layouts, indicators and auto-hide. Enabling it hides the native Windows taskbar, including the notification area.
 - **Recovery:** the dock uses a helper process before hiding Explorer windows; native taskbar positioning has a separate guardian. See [Failure Modes & Recovery](docs/FAILURES_AND_RECOVERY.md).
-- **Planned Studio controls:** wallpaper playback, audio visualization and widgets. Their presence in the workspace does not mean their complete user-facing flows are implemented.
+- **Wallpapers:** import MP4/WebM files, apply and manage them in a local library, and configure playback and scene quality. The Workshop tab discovers Wallpaper Engine items already downloaded by Steam; browse the Workshop, subscribe in Steam, refresh, then import a supported video or 2D scene. Atelier does not download Workshop items directly.
+- **Scenes:** play supported 2D Wallpaper Engine scenes with per-wallpaper and author-provided controls. Compatibility is partial: custom shaders, SceneScript, 3D models and some effects and animations are not supported. See [Scene playback](docs/SCENE_PLAYBACK.md).
+- **Widgets:** configure desktop clock, calendar, system, media, battery, notes, weather, photo and countdown widgets.
+- **Audio:** capture and analysis infrastructure is present; Studio's audio visualization controls are still in development.
 
 ## Architecture
 
@@ -37,7 +40,10 @@ flowchart LR
     App --> Dock["Dock window and state"]
     Dock --> Explorer
     Dock --> Apps["Windows apps and shortcuts"]
-    App --> Other["Wallpaper, audio and widget modules"]
+    App --> Wallpaper["Wallpaper library and player"]
+    Wallpaper --> Steam["Downloaded Steam Workshop items"]
+    App --> Widgets["Desktop widgets"]
+    App --> Audio["Audio capture and analysis"]
     Dock --> Guardian["Recovery helper"]
 ```
 
@@ -53,6 +59,7 @@ The Tauri application is the primary Studio entry point. The separate `atelier-c
 - [Compatibility](docs/COMPATIBILITY.md)
 - [Failure modes and recovery](docs/FAILURES_AND_RECOVERY.md)
 - [Development and testing](docs/DEVELOPMENT.md)
+- [Scene playback and compatibility](docs/SCENE_PLAYBACK.md)
 - [Security considerations](docs/SECURITY.md)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
@@ -63,10 +70,10 @@ The names below match the directories in `crates/`. Cargo package names retain t
 - [`common`](docs/crates/COMMON.md) — configuration, presets and errors.
 - [`core`](docs/crates/CORE.md) — experimental daemon and tray.
 - [`taskbar`](docs/crates/TASKBAR.md) — Explorer styling, positioning and recovery.
-- [`ui`](docs/crates/UI.md) — Studio and the separate dock.
-- [`wallpaper`](docs/crates/WALLPAPER.md) — wallpaper infrastructure.
+- [`ui`](docs/crates/UI.md) — Studio, wallpaper and widget controls, and the separate dock.
+- [`wallpaper`](docs/crates/WALLPAPER.md) — desktop hosting, wallpaper formats and rendering infrastructure.
 - [`audio`](docs/crates/AUDIO.md) — audio capture and spectrum analysis.
-- [`widget`](docs/crates/WIDGET.md) — widget infrastructure.
+- [`widget`](docs/crates/WIDGET.md) — widget windows and data providers.
 
 ## Build and run
 
@@ -84,6 +91,8 @@ For a development copy that does not lock `target\debug\Atelier.exe`, run `scrip
 ```powershell
 cargo test -p atelier-common
 cargo test -p atelier-ui --lib
+cargo test -p atelier-wallpaper --lib
+node --test crates/ui/tests/*.test.cjs
 cargo check --workspace
 ```
 
