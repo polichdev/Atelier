@@ -362,7 +362,11 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
     <nav class="nav" aria-label="Sections">
       <button class="active" data-tab="taskbar">
         <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="10" width="14" height="5" rx="1.5"/><rect x="1" y="2" width="5" height="5" rx="1"/><rect x="8" y="2" width="7" height="5" rx="1"/></svg>
-        <span class="nav-label">Taskbar</span>
+        <span class="nav-label">Windows Taskbar</span>
+      </button>
+      <button data-tab="custom-taskbar">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="11" width="12" height="3.5" rx="1.5"/><circle cx="4.5" cy="12.75" r="0.6" fill="currentColor"/><circle cx="7" cy="12.75" r="0.6" fill="currentColor"/><circle cx="9.5" cy="12.75" r="0.6" fill="currentColor"/><circle cx="12" cy="12.75" r="0.6" fill="currentColor"/><rect x="3" y="2" width="10" height="7" rx="1"/></svg>
+        <span class="nav-label">Custom Taskbar</span>
       </button>
       <button data-tab="wallpaper">
         <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="14" height="14" rx="2"/><circle cx="5.5" cy="5.5" r="1.5"/><path d="M1 11l4-4 3 3 2-2 5 5"/></svg>
@@ -398,11 +402,10 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
 
         <section class="tab active" id="taskbar">
           <div class="card" style="margin-bottom:18px" id="native-taskbar-appearance">
-            <div class="card-title">Windows Taskbar</div>
+            <div class="card-title">Taskbar</div>
             <p id="native-taskbar-status" hidden style="padding:14px 18px;color:var(--muted);font-size:12px"></p>
-            <div style="padding:14px 18px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="native-compact" type="button">Compact buttons</button><button class="btn" id="native-macos" type="button">macOS-style buttons</button><button class="btn" id="native-reset" type="button">Reset button styles</button><button class="btn" id="native-repair" type="button">Restore sharp icons</button></div>
             <div class="dd-controls">
-              <label class="dd-field">Taskbar position<select id="native-position" class="inline-select"><option value="-1">Default</option><option value="3">Bottom</option><option value="1">Top</option><option value="0">Left</option><option value="2">Right</option></select></label>
+              <label class="dd-field">Taskbar position<select id="native-position" class="inline-select"><option value="-1">Default (Bottom)</option><option value="3">Bottom</option><option value="1">Top</option><option value="0" disabled>Left (Not supported in Win 11)</option><option value="2" disabled>Right (Not supported in Win 11)</option></select></label>
               <label class="dd-field">Icon size<select id="native-icon-size" class="inline-select"><option value="0">Default</option><option value="16">16 px</option><option value="20">20 px</option><option value="24">24 px</option><option value="28">28 px</option><option value="32">32 px</option><option value="40">40 px</option><option value="48">48 px</option><option value="64">64 px</option></select></label>
               <label class="dd-field">Button width<select id="native-button-width" class="inline-select"><option value="0">Default</option><option value="24">24 px</option><option value="28">28 px</option><option value="32">32 px</option><option value="36">36 px</option><option value="40">40 px</option><option value="44">44 px</option><option value="48">48 px</option><option value="56">56 px</option><option value="64">64 px</option><option value="72">72 px</option><option value="96">96 px</option><option value="120">120 px</option></select></label>
               <label class="dd-field">Button corners<span class="dd-range"><input id="native-button-radius" type="range" min="-1" max="24"><output></output></span></label>
@@ -410,44 +413,6 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
               <label class="dd-field">Running indicator<select id="native-running-indicator" class="inline-select"><option value="0">Default</option><option value="1">Dot</option><option value="2">Line</option><option value="3">Hidden</option></select></label>
               <label class="dd-field">Hover size<span class="dd-range"><input id="native-hover-scale" type="range" min="100" max="150" step="5"><output></output></span></label>
             </div>
-          </div>
-          <div class="card" id="desktop-dock-settings" style="margin-bottom:18px">
-            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">macOS Taskbar <label style="display:flex;align-items:center;gap:9px;font-size:12px"><span>Enable</span><input id="dd-enabled" class="switch" type="checkbox" aria-label="Enable macOS taskbar"></label></div>
-            <div class="dd-controls">
-              <label class="dd-field">Screen edge<select id="dd-position" class="inline-select"><option value="bottom">Bottom</option><option value="top">Top</option><option value="left">Left</option><option value="right">Right</option></select></label>
-              <label class="dd-field">Alignment<select id="dd-alignment" class="inline-select"><option value="start">Start</option><option value="center">Center</option><option value="end">End</option></select></label>
-              <label class="dd-field">Icon size<span class="dd-range"><input id="dd-icon_size" type="range" min="20" max="96"><output></output></span></label>
-              <label class="dd-field">Hover magnification<span class="dd-range"><input id="dd-magnification" type="range" min="100" max="180" step="5"><output></output></span></label>
-            </div>
-            <details id="desktop-dock-details">
-              <summary class="dock-details-summary" aria-label="Toggle macOS taskbar settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 9 7 7 7-7"/></svg></summary>
-            <div style="padding:14px 18px;display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn" id="dd-preset-mac" type="button">macOS layout</button>
-              <button class="btn" id="dd-preset-compact" type="button">Compact</button>
-              <button class="btn" id="dd-preset-sidebar" type="button">Side dock</button>
-            </div>
-            <div class="dd-controls">
-              <label class="dd-field">Display<select id="dd-monitor" class="inline-select"><option value="0">Display 1</option></select></label>
-              <label class="dd-field">Icon appearance<select id="dd-icon_style" class="inline-select"><option value="original">Original</option><option value="rounded">Rounded tiles</option><option value="monochrome">Monochrome</option></select></label>
-              <label class="dd-field">Icon spacing<span class="dd-range"><input id="dd-spacing" type="range" min="0" max="24"><output></output></span></label>
-              <label class="dd-field">Inactive icon opacity<span class="dd-range"><input id="dd-inactive_opacity" type="range" min="20" max="100"><output></output></span></label>
-              <label class="dd-field">Dock padding<span class="dd-range"><input id="dd-padding" type="range" min="4" max="28"><output></output></span></label>
-              <label class="dd-field">Distance from edge<span class="dd-range"><input id="dd-edge_gap" type="range" min="0" max="100"><output></output></span></label>
-              <label class="dd-field">Corner radius<span class="dd-range"><input id="dd-radius" type="range" min="0" max="48"><output></output></span></label>
-              <label class="dd-field">Dock opacity<span class="dd-range"><input id="dd-opacity" type="range" min="10" max="100"><output></output></span></label>
-              <label class="dd-field">Dock tint<input id="dd-tint" type="color"></label>
-              <label class="dd-field">Running indicator<select id="dd-indicator" class="inline-select"><option value="dot">Dot</option><option value="line">Line</option><option value="none">Hidden</option></select></label>
-              <label class="dd-field">Indicator color<input id="dd-indicator_color" type="color"></label>
-              <label class="dd-field">Highlight active app<input id="dd-active_background" class="switch" type="checkbox"></label>
-              <label class="dd-field">App names on hover<input id="dd-show_labels" class="switch" type="checkbox"></label>
-              <label class="dd-field">Show running apps<input id="dd-show_running" class="switch" type="checkbox"></label>
-              <label class="dd-field">Show clock<input id="dd-show_clock" class="switch" type="checkbox"></label><label class="dd-field">Show Windows Start<input id="dd-show_start" class="switch" type="checkbox"></label><label class="dd-field">Show Windows Search<input id="dd-show_search" class="switch" type="checkbox"></label><label class="dd-field">Show hidden tray icons<input id="dd-show_tray" class="switch" type="checkbox"></label><label class="dd-field">Show input language<input id="dd-show_language" class="switch" type="checkbox"></label><label class="dd-field">Show network<input id="dd-show_network" class="switch" type="checkbox"></label><label class="dd-field">Show volume<input id="dd-show_volume" class="switch" type="checkbox"></label><label class="dd-field">Show Atelier button<input id="dd-show_studio" class="switch" type="checkbox"></label><label class="dd-field">Launch animation<input id="dd-launch_animation" class="switch" type="checkbox"></label><label class="dd-field">Open apps maximized<input id="dd-maximize_on_open" class="switch" type="checkbox"></label>
-              <label class="dd-field">Automatically hide<input id="dd-auto_hide" class="switch" type="checkbox"></label>
-              <label class="dd-field">Hide delay<span class="dd-range"><input id="dd-hide_delay" type="range" min="200" max="3000" step="100"><output></output></span></label><label class="dd-field">Space below maximized apps<span class="dd-range"><input id="dd-maximized_bottom_gap" type="range" min="0" max="200" step="1"><output></output></span></label>
-            </div>
-            <div style="padding:14px 18px;border-top:1px solid var(--border)"><strong style="font-size:12px">Apps in the OS</strong><div id="dd-apps" class="dd-apps" style="margin-top:10px"></div></div>
-            </details>
-            <span id="dd-status" class="dock-status" role="status"></span>
           </div>
 
           <div class="grid-2">
@@ -498,7 +463,7 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
               </div>
 
               <div class="card">
-                <div class="card-title">Island Dock Geometry</div>
+                <div class="card-title">Geometry</div>
                 <div class="island-configurator">
                   <div class="island-stage" id="island-stage">
                     <div class="island-wallpaper"></div>
@@ -568,6 +533,47 @@ details[open] > .dock-details-summary svg{transform:rotate(180deg)}
 
           </div>
 
+        </section>
+
+        <section class="tab" id="custom-taskbar">
+          <div class="card" id="desktop-dock-settings" style="margin-bottom:18px">
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">Taskbar <label style="display:flex;align-items:center;gap:9px;font-size:12px"><span>Enable</span><input id="dd-enabled" class="switch" type="checkbox" aria-label="Enable custom taskbar"></label></div>
+            <div class="dd-controls">
+              <label class="dd-field">Screen edge<select id="dd-position" class="inline-select"><option value="bottom">Bottom</option><option value="top">Top</option><option value="left">Left</option><option value="right">Right</option></select></label>
+              <label class="dd-field">Alignment<select id="dd-alignment" class="inline-select"><option value="start">Start</option><option value="center">Center</option><option value="end">End</option></select></label>
+              <label class="dd-field">Icon size<span class="dd-range"><input id="dd-icon_size" type="range" min="20" max="96"><output></output></span></label>
+              <label class="dd-field">Hover magnification<span class="dd-range"><input id="dd-magnification" type="range" min="100" max="180" step="5"><output></output></span></label>
+            </div>
+            <details id="desktop-dock-details" open>
+              <summary class="dock-details-summary" aria-label="Toggle taskbar settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 9 7 7 7-7"/></svg></summary>
+            <div style="padding:14px 18px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" id="dd-preset-mac" type="button">macOS layout</button>
+              <button class="btn" id="dd-preset-compact" type="button">Compact</button>
+              <button class="btn" id="dd-preset-sidebar" type="button">Side dock</button>
+            </div>
+            <div class="dd-controls">
+              <label class="dd-field">Display<select id="dd-monitor" class="inline-select"><option value="0">Display 1</option></select></label>
+              <label class="dd-field">Icon appearance<select id="dd-icon_style" class="inline-select"><option value="original">Original</option><option value="rounded">Rounded tiles</option><option value="monochrome">Monochrome</option></select></label>
+              <label class="dd-field">Icon spacing<span class="dd-range"><input id="dd-spacing" type="range" min="0" max="24"><output></output></span></label>
+              <label class="dd-field">Inactive icon opacity<span class="dd-range"><input id="dd-inactive_opacity" type="range" min="20" max="100"><output></output></span></label>
+              <label class="dd-field">Dock padding<span class="dd-range"><input id="dd-padding" type="range" min="4" max="28"><output></output></span></label>
+              <label class="dd-field">Distance from edge<span class="dd-range"><input id="dd-edge_gap" type="range" min="0" max="100"><output></output></span></label>
+              <label class="dd-field">Corner radius<span class="dd-range"><input id="dd-radius" type="range" min="0" max="48"><output></output></span></label>
+              <label class="dd-field">Dock opacity<span class="dd-range"><input id="dd-opacity" type="range" min="10" max="100"><output></output></span></label>
+              <label class="dd-field">Dock tint<input id="dd-tint" type="color"></label>
+              <label class="dd-field">Running indicator<select id="dd-indicator" class="inline-select"><option value="dot">Dot</option><option value="line">Line</option><option value="none">Hidden</option></select></label>
+              <label class="dd-field">Indicator color<input id="dd-indicator_color" type="color"></label>
+              <label class="dd-field">Highlight active app<input id="dd-active_background" class="switch" type="checkbox"></label>
+              <label class="dd-field">App names on hover<input id="dd-show_labels" class="switch" type="checkbox"></label>
+              <label class="dd-field">Show running apps<input id="dd-show_running" class="switch" type="checkbox"></label>
+              <label class="dd-field">Show clock<input id="dd-show_clock" class="switch" type="checkbox"></label><label class="dd-field">Show Windows Start<input id="dd-show_start" class="switch" type="checkbox"></label><label class="dd-field">Show Windows Search<input id="dd-show_search" class="switch" type="checkbox"></label><label class="dd-field">Show hidden tray icons<input id="dd-show_tray" class="switch" type="checkbox"></label><label class="dd-field">Show input language<input id="dd-show_language" class="switch" type="checkbox"></label><label class="dd-field">Show network<input id="dd-show_network" class="switch" type="checkbox"></label><label class="dd-field">Show volume<input id="dd-show_volume" class="switch" type="checkbox"></label><label class="dd-field">Show Atelier button<input id="dd-show_studio" class="switch" type="checkbox"></label><label class="dd-field">Launch animation<input id="dd-launch_animation" class="switch" type="checkbox"></label><label class="dd-field">Open apps maximized<input id="dd-maximize_on_open" class="switch" type="checkbox"></label>
+              <label class="dd-field">Automatically hide<input id="dd-auto_hide" class="switch" type="checkbox"></label>
+              <label class="dd-field">Hide delay<span class="dd-range"><input id="dd-hide_delay" type="range" min="200" max="3000" step="100"><output></output></span></label><label class="dd-field">Space below maximized apps<span class="dd-range"><input id="dd-maximized_bottom_gap" type="range" min="0" max="200" step="1"><output></output></span></label>
+            </div>
+            <div style="padding:14px 18px;border-top:1px solid var(--border)"><strong style="font-size:12px">Apps in the OS</strong><div id="dd-apps" class="dd-apps" style="margin-top:10px"></div></div>
+            </details>
+            <span id="dd-status" class="dock-status" role="status"></span>
+          </div>
         </section>
 
         <section class="tab" id="wallpaper">
@@ -980,11 +986,6 @@ all('#native-taskbar-appearance select,#native-taskbar-appearance input').forEac
   input.addEventListener('input',()=>{paint(read(),false);schedule()});input.addEventListener('change',save);
 });
 const defaultNativeAppearance={position:-1,icon_size:0,button_width:0,button_radius:-1,inactive_opacity:100,running_indicator:0,hover_scale:100};
-function nativePreset(appearance){if(!ready)return;const next=read();paint({...next,appearance:{...appearance,position:next.appearance.position}},false);save()}
-el('native-reset').addEventListener('click',()=>nativePreset(defaultNativeAppearance));
-el('native-repair').addEventListener('click',async()=>{if(!ready||resetting)return;resetting=true;queued=false;clearTimeout(saveTimer);try{await saveDone;paint(await invoke('repair_taskbar_icons'));toast('Native icon rendering restored')}catch(e){toast(String(e),true)}finally{resetting=false}});
-el('native-compact').addEventListener('click',()=>nativePreset({...defaultNativeAppearance,icon_size:20,button_width:32,button_radius:6,running_indicator:1}));
-el('native-macos').addEventListener('click',()=>nativePreset({...defaultNativeAppearance,icon_size:32,button_width:44,button_radius:10,inactive_opacity:85,running_indicator:1,hover_scale:125}));
 
 async function restoreWindows(){
   if(!ready||resetting)return;
@@ -1081,7 +1082,7 @@ all('[data-tab]').forEach(b=>{
 (async()=>{
   if(!invoke){
     paint(config);
-    all('#taskbar input,#taskbar select,#taskbar button').forEach(control=>control.disabled=true);
+    all('#taskbar input,#taskbar select,#taskbar button,#custom-taskbar input,#custom-taskbar select,#custom-taskbar button').forEach(control=>control.disabled=true);
     return;
   }
   try{

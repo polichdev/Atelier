@@ -126,16 +126,14 @@ test('Taskbar controls and collapsible Desktop Dock share a tab',async()=>{
   assert.equal(await page.locator('#dd-monitor').isVisible(),true);
   assert.equal(await page.locator('#native-taskbar-appearance').isVisible(),true);
   const before=await page.evaluate(()=>__dockFixture.calls.filter(c=>c.cmd==='set_dock_config').length);
-  await page.locator('#native-compact').click();await page.waitForFunction(()=>__dockFixture.native.appearance.icon_size===20&&__dockFixture.native.appearance.button_width===32);
-  await page.locator('#native-reset').click();await page.waitForFunction(()=>__dockFixture.native.appearance.icon_size===0&&__dockFixture.native.appearance.button_radius===-1);
-  for(const position of ['0','1','2','3']){
+  await page.locator('#native-icon-size').selectOption('20');
+  await page.waitForFunction(()=>__dockFixture.native.appearance.icon_size===20);
+  await page.locator('#native-icon-size').selectOption('0');
+  await page.waitForFunction(()=>__dockFixture.native.appearance.icon_size===0);
+  for(const position of ['-1','1','3']){
     await page.locator('#native-position').selectOption(position);
     await page.waitForFunction(p=>__dockFixture.native.appearance.position===Number(p),position);
   }
-  await page.locator('#native-compact').click();
-  await page.waitForFunction(()=>__dockFixture.native.appearance.icon_size===20);
-  await page.getByRole('button',{name:'Restore sharp icons',exact:true}).click();
-  await page.waitForFunction(()=>__dockFixture.native.appearance.icon_size===0);
   assert.equal(await page.evaluate(()=>__dockFixture.native.appearance.position),3);
   assert.equal(await page.evaluate(()=>__dockFixture.calls.filter(c=>c.cmd==='set_dock_config').length),before);
   assert.deepEqual(errors,[]);await page.close();
