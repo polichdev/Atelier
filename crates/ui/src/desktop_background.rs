@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    io::Write,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -16,13 +15,13 @@ use windows::Win32::{
         },
         Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
     },
-    UI::Shell::{DesktopWallpaper, IDesktopWallpaper, DSS_ENABLED},
+    UI::Shell::{DesktopWallpaper, IDesktopWallpaper},
 };
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 struct Record {
     owner: u32,
-    enabled: bool,
+    slideshow_tick: Option<u32>,
 }
 static LEASE: Mutex<Option<Record>> = Mutex::new(None);
 static ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -82,55 +81,86 @@ pub fn recover() -> Result<(), String> {
                 .into(),
         );
     }
-    with_desktop(|desktop| unsafe { desktop.Enable(record.enabled) }.map_err(|e| e.to_string()))?;
+    with_desktop(|desktop| {
+        use windows::Win32::UI::Shell::DESKTOP_SLIDESHOW_OPTIONS;
+        if let Some(tick) = record.slideshow_tick {
+            let mut opt = DESKTOP_SLIDESHOW_OPTIONS::default();
+            let mut _current = 0u32;
+            let _ = unsafe { desktop.GetSlideshowOptions(&mut opt, &mut _current) };
+            let _ = unsafe { desktop.SetSlideshowOptions(opt, tick) };
+        }
+        Ok(())
+    })?;
     fs::remove_file(path).map_err(|e| e.to_string())
 }
 
 pub fn suspend() -> Result<(), String> {
-    set_suspended(true).map(|_| ())
+    let mut lease = LEASE.lock().map_err(|e| e.to_string())?;
+    if SHUTTING_DOWN.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    if lease.is_none() && !ACTIVE.load(Ordering::SeqCst) {
+        let _ = recover();
+    }
+    let _ = with_desktop(|desktop| {
+        use windows::Win32::UI::Shell::DESKTOP_SLIDESHOW_OPTIONS;
+        let mut opt = DESKTOP_SLIDESHOW_OPTIONS::default();
+        let mut tick = 0u32;
+        if unsafe { desktop.GetSlideshowOptions(&mut opt, &mut tick) }.is_ok()
+            && tick > 0
+            && tick != u32::MAX
+        {
+            suspend_with(&mut lease, &journal()?, Some(tick), |new_tick| {
+                if let Some(t) = new_tick {
+                    unsafe { desktop.SetSlideshowOptions(opt, t) }.map_err(|e| e.to_string())?;
+                }
+                Ok(())
+            })?;
+        }
+        Ok(())
+    });
+    ACTIVE.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 pub fn refresh() -> Result<bool, String> {
-    set_suspended(false)
+    Ok(!SHUTTING_DOWN.load(Ordering::SeqCst) && ACTIVE.load(Ordering::SeqCst))
 }
 
-fn set_suspended(activate: bool) -> Result<bool, String> {
+pub fn restore() -> Result<(), String> {
     let mut lease = LEASE.lock().map_err(|e| e.to_string())?;
-    if SHUTTING_DOWN.load(Ordering::SeqCst) {
-        return Ok(false);
-    }
-    if activate {
-        ACTIVE.store(true, Ordering::SeqCst);
-    }
-    if !ACTIVE.load(Ordering::SeqCst) {
-        return Ok(false);
-    }
+    ACTIVE.store(false, Ordering::SeqCst);
     if lease.is_none() {
-        recover()?;
+        return Ok(());
     }
     with_desktop(|desktop| {
-        let enabled =
-            unsafe { desktop.GetStatus() }.map_err(|e| e.to_string())?.0 & DSS_ENABLED.0 != 0;
-        suspend_with(&mut lease, &journal()?, enabled, |enabled| {
-            unsafe { desktop.Enable(enabled) }.map_err(|e| e.to_string())
-        })?;
-        Ok(true)
+        use windows::Win32::UI::Shell::DESKTOP_SLIDESHOW_OPTIONS;
+        restore_with(&mut lease, &journal()?, |tick| {
+            if let Some(t) = tick {
+                let mut opt = DESKTOP_SLIDESHOW_OPTIONS::default();
+                let mut _current = 0u32;
+                let _ = unsafe { desktop.GetSlideshowOptions(&mut opt, &mut _current) };
+                unsafe { desktop.SetSlideshowOptions(opt, t) }.map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        })
     })
 }
 
 fn suspend_with(
     lease: &mut Option<Record>,
     path: &Path,
-    enabled: bool,
-    set_enabled: impl FnOnce(bool) -> Result<(), String>,
+    slideshow_tick: Option<u32>,
+    set_tick: impl FnOnce(Option<u32>) -> Result<(), String>,
 ) -> Result<(), String> {
     if lease.is_none() {
         let record = Record {
             owner: std::process::id(),
-            enabled,
+            slideshow_tick,
         };
         fs::create_dir_all(path.parent().ok_or("Invalid background recovery path")?)
             .map_err(|e| e.to_string())?;
+        use std::io::Write;
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -141,33 +171,20 @@ fn suspend_with(
             .map_err(|e| e.to_string())?;
         *lease = Some(record);
     }
-    if enabled {
-        set_enabled(false).map_err(|e| format!("Could not suspend the Windows background: {e}"))?;
+    if slideshow_tick.is_some() {
+        set_tick(Some(u32::MAX)).map_err(|e| format!("Could not pause Windows slideshow: {e}"))?;
     }
     Ok(())
-}
-
-pub fn restore() -> Result<(), String> {
-    let mut lease = LEASE.lock().map_err(|e| e.to_string())?;
-    ACTIVE.store(false, Ordering::SeqCst);
-    if lease.is_none() {
-        return Ok(());
-    }
-    with_desktop(|desktop| {
-        restore_with(&mut lease, &journal()?, |enabled| {
-            unsafe { desktop.Enable(enabled) }.map_err(|e| e.to_string())
-        })
-    })
 }
 
 fn restore_with(
     lease: &mut Option<Record>,
     path: &Path,
-    set_enabled: impl FnOnce(bool) -> Result<(), String>,
+    set_tick: impl FnOnce(Option<u32>) -> Result<(), String>,
 ) -> Result<(), String> {
     if let Some(record) = *lease {
-        set_enabled(record.enabled)
-            .map_err(|e| format!("Could not restore the Windows background: {e}"))?;
+        set_tick(record.slideshow_tick)
+            .map_err(|e| format!("Could not restore Windows slideshow: {e}"))?;
         match fs::remove_file(path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -188,30 +205,25 @@ mod tests {
     use super::*;
     use std::cell::Cell;
     #[test]
-    fn repeated_refresh_preserves_original_background_and_failed_restore_can_retry() {
-        for originally_enabled in [true, false] {
+    fn failed_legacy_restore_keeps_journal_for_retry() {
+        for original_tick in [Some(60000), None] {
             let path = std::env::temp_dir().join(format!(
-                "atelier-background-{}-{originally_enabled}.json",
-                std::process::id()
+                "atelier-background-{}-{:?}.json",
+                std::process::id(),
+                original_tick
             ));
-            let mut lease = None;
-            let system = Cell::new(originally_enabled);
-            let set = |enabled| {
-                system.set(enabled);
+            let mut lease = Some(Record { owner: std::process::id(), slideshow_tick: original_tick });
+            std::fs::write(&path, b"legacy journal").unwrap();
+            let system = Cell::new(Some(u32::MAX));
+            let set = |tick| {
+                system.set(tick);
                 Ok(())
             };
-            suspend_with(&mut lease, &path, system.get(), set).unwrap();
-            assert!(!system.get());
-            suspend_with(&mut lease, &path, system.get(), set).unwrap();
-            assert_eq!(lease.unwrap().enabled, originally_enabled);
-            system.set(true);
-            suspend_with(&mut lease, &path, system.get(), set).unwrap();
-            assert!(!system.get());
             assert!(restore_with(&mut lease, &path, |_| Err("API failed".into())).is_err());
             assert!(path.exists());
             assert!(lease.is_some());
             restore_with(&mut lease, &path, set).unwrap();
-            assert_eq!(system.get(), originally_enabled);
+            assert_eq!(system.get(), original_tick);
             assert!(lease.is_none());
             assert!(!path.exists());
         }

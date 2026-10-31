@@ -1,9 +1,13 @@
-use windows::core::w;
-use windows::Win32::Foundation::{POINT, RECT};
+use windows::core::{w, PWSTR};
+use windows::Win32::Foundation::{CloseHandle, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     ClientToScreen, GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
 use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+use windows::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+    PROCESS_QUERY_LIMITED_INFORMATION,
+};
 use windows::Win32::UI::Shell::{
     SHQueryUserNotificationState, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
 };
@@ -67,6 +71,44 @@ pub fn is_running_on_battery() -> bool {
     }
 }
 
+pub fn is_screenshot_process(process_id: u32) -> bool {
+    if process_id == 0 {
+        return false;
+    }
+    let Ok(handle) = (unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id) }) else {
+        return false;
+    };
+    let mut buffer = [0u16; 1024];
+    let mut len = buffer.len() as u32;
+    let ok = unsafe {
+        QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_FORMAT(0),
+            PWSTR(buffer.as_mut_ptr()),
+            &mut len,
+        )
+    }
+    .is_ok();
+    let _ = unsafe { CloseHandle(handle) };
+    if !ok {
+        return false;
+    }
+    let exe = String::from_utf16_lossy(&buffer[..len as usize])
+        .rsplit('\\')
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    matches!(
+        exe.as_str(),
+        "screenclippinghost.exe"
+            | "snippingtool.exe"
+            | "snippingtoolapp.exe"
+            | "lightshot.exe"
+            | "sharex.exe"
+            | "flameshot.exe"
+    )
+}
+
 pub fn is_fullscreen_window_active() -> bool {
     let foreground = unsafe { GetForegroundWindow() };
     if foreground.0.is_null() {
@@ -77,6 +119,7 @@ pub fn is_fullscreen_window_active() -> bool {
         GetWindowThreadProcessId(foreground, Some(&mut process_id));
     }
     if process_id == std::process::id()
+        || is_screenshot_process(process_id)
         || !unsafe { IsWindowVisible(foreground) }.as_bool()
         || unsafe { IsIconic(foreground) }.as_bool()
     {

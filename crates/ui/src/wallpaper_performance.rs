@@ -104,6 +104,7 @@ impl PerformanceSettings {
         });
     }
 }
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct Environment {
     pub focused: bool,
@@ -119,6 +120,7 @@ pub struct PlaybackState {
     pub muted: bool,
     pub reason: Option<String>,
 }
+#[allow(dead_code)]
 pub fn evaluate(
     settings: &PerformanceSettings,
     environment: &Environment,
@@ -190,6 +192,7 @@ pub fn evaluate(
         reason,
     }
 }
+#[allow(dead_code)]
 pub fn environment(settings: &PerformanceSettings) -> Environment {
     let mut result = Environment {
         battery: atelier_wallpaper::occlusion::is_running_on_battery(),
@@ -205,6 +208,7 @@ pub fn environment(settings: &PerformanceSettings) -> Environment {
         let class = String::from_utf16_lossy(&class[..length.max(0) as usize]);
         result.focused = pid != 0
             && pid != std::process::id()
+            && !atelier_wallpaper::occlusion::is_screenshot_process(pid)
             && IsWindowVisible(window).as_bool()
             && !IsIconic(window).as_bool()
             && !matches!(

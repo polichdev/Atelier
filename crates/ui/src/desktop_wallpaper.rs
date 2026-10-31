@@ -16,13 +16,13 @@ use windows::Win32::{
     UI::WindowsAndMessaging::{
         FindWindowExW, GetAncestor, GetClassNameW, GetDesktopWindow, GetSystemMetrics, GetWindow,
         GetWindowLongPtrW, GetWindowRect, IsWindow, SetLayeredWindowAttributes, SetParent,
-        SetWindowLongPtrW, SetWindowPos, GA_PARENT, GWL_EXSTYLE, GWL_STYLE, GW_HWNDPREV, HWND_TOP,
-        LWA_ALPHA, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
-        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
-        WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_DLGFRAME,
-        WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-        WS_EX_NOREDIRECTIONBITMAP, WS_EX_STATICEDGE, WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
-        WS_HSCROLL, WS_POPUP, WS_THICKFRAME, WS_VISIBLE, WS_VSCROLL,
+        SetWindowLongPtrW, SetWindowPos, ShowWindow, GA_PARENT, GWL_EXSTYLE, GWL_STYLE, GW_HWNDPREV,
+        HWND_TOP, LWA_ALPHA, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+        SM_YVIRTUALSCREEN, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+        SWP_SHOWWINDOW, SW_SHOW, WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
+        WS_CLIPSIBLINGS, WS_DLGFRAME, WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_LAYERED,
+        WS_EX_NOACTIVATE, WS_EX_STATICEDGE, WS_EX_TOOLWINDOW,
+        WS_EX_WINDOWEDGE, WS_HSCROLL, WS_POPUP, WS_THICKFRAME, WS_VISIBLE, WS_VSCROLL,
     },
 };
 const MAX_VIDEO: u64 = 1024 * 1024 * 1024;
@@ -620,6 +620,7 @@ fn attach(w: &tauri::WebviewWindow, worker: HWND) -> Result<(), String> {
                 | WS_EX_WINDOWEDGE.0) as isize))
             | (WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0) as isize;
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex_style);
+        use windows::Win32::UI::WindowsAndMessaging::WS_EX_NOREDIRECTIONBITMAP;
         if GetWindowLongPtrW(worker, GWL_EXSTYLE) & WS_EX_NOREDIRECTIONBITMAP.0 as isize != 0 {
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex_style | WS_EX_LAYERED.0 as isize);
             SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA)
@@ -686,8 +687,14 @@ fn attach(w: &tauri::WebviewWindow, worker: HWND) -> Result<(), String> {
             SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_SHOWWINDOW,
         )
         .map_err(|e| format!("Could not size wallpaper window: {e}"))?;
+        if let Some(sh) = shelldll {
+            if !sh.0.is_null() {
+                let _ = ShowWindow(sh, SW_SHOW);
+            }
+        }
         if let Ok(static_worker) = FindWindowExW(worker, HWND::default(), w!("WorkerW"), None) {
             if static_worker != hwnd {
+                let _ = ShowWindow(static_worker, SW_SHOW);
                 let _ = SetWindowPos(
                     static_worker,
                     hwnd,
@@ -717,6 +724,11 @@ fn attach(w: &tauri::WebviewWindow, worker: HWND) -> Result<(), String> {
     Ok(())
 }
 fn repair_static_worker_order(parent: HWND, wallpaper: HWND) -> Result<(), String> {
+    if let Ok(shelldll) = unsafe { FindWindowExW(parent, HWND::default(), w!("SHELLDLL_DefView"), None) } {
+        if !shelldll.0.is_null() {
+            let _ = unsafe { ShowWindow(shelldll, SW_SHOW) };
+        }
+    }
     let Ok(background) = (unsafe { FindWindowExW(parent, HWND::default(), w!("WorkerW"), None) })
     else {
         return Ok(());
@@ -731,10 +743,12 @@ fn repair_static_worker_order(parent: HWND, wallpaper: HWND) -> Result<(), Strin
             Err(_) => break,
         };
         if current == wallpaper {
+            let _ = unsafe { ShowWindow(background, SW_SHOW) };
             return Ok(());
         }
     }
     unsafe {
+        let _ = ShowWindow(background, SW_SHOW);
         SetWindowPos(
             background,
             wallpaper,
@@ -823,7 +837,24 @@ pub fn repair_after_workarea_change(app: tauri::AppHandle) {
             .lock()
             .map(|playback| playback.as_str() == "error")
             .unwrap_or(true);
-        if !active || failed || app.get_webview_window("desktop-wallpaper").is_none() {
+        if !active || failed {
+            return;
+        }
+        let Some(w) = app.get_webview_window("desktop-wallpaper") else {
+            return;
+        };
+        let is_healthy = w
+            .hwnd()
+            .ok()
+            .map(|hwnd| unsafe {
+                let parent = GetAncestor(HWND(hwnd.0 as _), GA_PARENT);
+                IsWindow(parent).as_bool()
+                    && !parent.0.is_null()
+                    && parent != GetDesktopWindow()
+                    && (GetWindowLongPtrW(HWND(hwnd.0 as _), GWL_STYLE) & WS_VISIBLE.0 as isize != 0)
+            })
+            .unwrap_or(false);
+        if is_healthy {
             return;
         }
         if let Err(error) = super::desktop_background::refresh().and_then(|active| {
@@ -1172,20 +1203,23 @@ pub async fn wallpaper_repair(window: tauri::Window, app: tauri::AppHandle) -> R
                 }
                 let mut rect = windows::Win32::Foundation::RECT::default();
                 unsafe { GetWindowRect(HWND(raw.0 as _), &mut rect) }.map_err(|e| e.to_string())?;
-                let expected = unsafe {
-                    let x = GetSystemMetrics(SM_XVIRTUALSCREEN);
-                    let y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                let (vx, vy, vcx, vcy) = unsafe {
                     (
-                        x,
-                        y,
-                        x + GetSystemMetrics(SM_CXVIRTUALSCREEN),
-                        y + GetSystemMetrics(SM_CYVIRTUALSCREEN),
+                        GetSystemMetrics(SM_XVIRTUALSCREEN),
+                        GetSystemMetrics(SM_YVIRTUALSCREEN),
+                        GetSystemMetrics(SM_CXVIRTUALSCREEN),
+                        GetSystemMetrics(SM_CYVIRTUALSCREEN),
                     )
                 };
                 let visible = unsafe { GetWindowLongPtrW(HWND(raw.0 as _), GWL_STYLE) }
                     & WS_VISIBLE.0 as isize
                     != 0;
-                if visible && (rect.left, rect.top, rect.right, rect.bottom) == expected {
+                let width_diff = ((rect.right - rect.left) - vcx).abs();
+                let height_diff = ((rect.bottom - rect.top) - vcy).abs();
+                let x_diff = (rect.left - vx).abs();
+                let y_diff = (rect.top - vy).abs();
+                let geometry_ok = width_diff <= 2 && height_diff <= 2 && x_diff <= 2 && y_diff <= 2;
+                if visible && geometry_ok {
                     repair_static_worker_order(parent, HWND(raw.0 as _))
                 } else {
                     attach(&w, parent)
@@ -1215,7 +1249,7 @@ pub fn wallpaper_pause_reason(state: tauri::State<Wallpapers>) -> Result<Option<
 pub fn wallpaper_playback_state(
     state: tauri::State<Wallpapers>,
 ) -> Result<super::wallpaper_performance::PlaybackState, String> {
-    let (options, performance) = {
+    let options = {
         let c = state.config.lock().map_err(|e| e.to_string())?;
         let Some(id) = c.active.as_deref() else {
             return Ok(super::wallpaper_performance::PlaybackState {
@@ -1224,16 +1258,13 @@ pub fn wallpaper_playback_state(
                 reason: Some("stopped".into()),
             });
         };
-        (c.options_for(id), c.performance.clone())
+        c.options_for(id)
     };
-    let environment = super::wallpaper_performance::environment(&performance);
-    Ok(super::wallpaper_performance::evaluate(
-        &performance,
-        &environment,
-        options.paused,
-        options.pause_fullscreen,
-        options.pause_battery,
-    ))
+    Ok(super::wallpaper_performance::PlaybackState {
+        paused: options.paused,
+        muted: options.mute,
+        reason: options.paused.then(|| "paused".to_owned()),
+    })
 }
 #[tauri::command]
 pub fn wallpaper_report(

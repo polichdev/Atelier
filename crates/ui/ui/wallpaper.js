@@ -11,10 +11,13 @@ function captureLoopFrame(){
 function releaseLoopFrame(){
  if(!loopFrame||loopFrame.style.display==='none')return;const version=loopFrameVersion;
  const release=()=>{if(version===loopFrameVersion&&video.readyState>=2&&!video.seeking&&!loopFrameFading){loopFrameFading=true;loopFrameReady=false;loopFrame.style.opacity='0';setTimeout(()=>{if(version===loopFrameVersion){loopFrame.style.display='none';loopFrameFading=false}},250)}};
+ if(video.seeking||video.readyState<2)return;
  if(typeof video.requestVideoFrameCallback==='function')video.requestVideoFrameCallback(release);else if(typeof requestAnimationFrame==='function')requestAnimationFrame(release);
- setTimeout(release,1000);
 }
-video.addEventListener('timeupdate',captureLoopFrame);
+if(typeof video.requestVideoFrameCallback==='function'){
+ const capture=()=>{captureLoopFrame();video.requestVideoFrameCallback(capture)};
+ video.requestVideoFrameCallback(capture);
+}else video.addEventListener('timeupdate',captureLoopFrame);
 video.addEventListener('seeking',()=>{if(loopFrame&&loopFrameReady&&video.currentTime<1){loopFrameVersion++;loopFrameFading=false;loopFrame.style.opacity='1';loopFrame.style.display='block'}});
 video.addEventListener('seeked',releaseLoopFrame);
 video.addEventListener('playing',releaseLoopFrame);
@@ -56,5 +59,5 @@ window.__TAURI__?.event?.listen('wallpaper-changed',event=>update(event.payload)
 window.__TAURI__?.event?.listen('wallpaper-scene-updated',event=>{if(config?.active===event.payload){current=null;update(config)}});
 invoke('wallpaper_snapshot').then(snapshot=>update(snapshot.config)).catch(()=>report('error'));
 setInterval(sync,1000);
-let repairing=false;setInterval(async()=>{if(!config?.active||repairing)return;repairing=true;try{await invoke('wallpaper_repair')}catch(error){console.error('Wallpaper desktop refresh failed',error)}finally{repairing=false}},10000);
+let repairing=false;setInterval(async()=>{if(!config?.active||repairing)return;repairing=true;try{await invoke('wallpaper_repair')}catch(error){console.error('Wallpaper desktop refresh failed',error)}finally{repairing=false}},1500);
 if(window.__ATELIER_RUNTIME_TEST__)import('./wallpaper-runtime-test.js').then(test=>test.run(()=>({player,current,lastStatus,config})));
