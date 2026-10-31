@@ -11,7 +11,7 @@ use tauri::{Emitter, Manager};
 use windows::{
     core::{w, Interface, PCWSTR},
     Win32::{
-        Foundation::{BOOL, HWND, LPARAM},
+        Foundation::{BOOL, COLORREF, HWND, LPARAM, WPARAM},
         System::{Com::*, Threading::*},
         UI::{Shell::*, WindowsAndMessaging::*},
     },
@@ -272,16 +272,20 @@ impl DockState {
     }
     pub fn restore_taskbar(&self) {
         self.remove_gap_appbar();
-        if let Ok(mut hidden) = self.hidden.lock() {
-            for handle in hidden.drain(..) {
-                show_taskbar(handle)
-            }
-        }
         if let Ok(mut lease) = self.appbar_lease.lock() {
             if let Some(lease) = lease.take() {
                 lease.restore();
             }
         }
+        if let Ok(mut hidden) = self.hidden.lock() {
+            for handle in hidden.drain(..) {
+                show_taskbar(handle);
+            }
+        }
+        for taskbar in atelier_taskbar::discovery::find_all_taskbars() {
+            show_taskbar(taskbar.0 as isize);
+        }
+        dismiss_stuck_input_hosts();
     }
     fn remove_gap_appbar(&self) {
         if let Ok(mut current) = self.gap_appbar.lock() {
@@ -335,6 +339,17 @@ impl DockState {
         self.stopping.store(true, Ordering::Relaxed);
         self.restore_taskbar()
     }
+}
+impl Drop for DockState {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+pub fn restore_all_taskbars() {
+    for taskbar in atelier_taskbar::discovery::find_all_taskbars() {
+        show_taskbar(taskbar.0 as isize);
+    }
+    dismiss_stuck_input_hosts();
 }
 fn key(s: &str) -> String {
     s.replace('/', "\\").to_lowercase()
@@ -535,7 +550,41 @@ fn show_taskbar(handle: isize) {
         && ["Shell_TrayWnd", "Shell_SecondaryTrayWnd"]
             .contains(&String::from_utf16_lossy(&class[..n as usize]).as_str())
     {
-        let _ = unsafe { ShowWindow(hwnd(handle), SW_SHOWNA) };
+        let h = hwnd(handle);
+        unsafe {
+            let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+            if ex & WS_EX_LAYERED.0 as isize != 0 {
+                SetWindowLongPtrW(h, GWL_EXSTYLE, ex & !(WS_EX_LAYERED.0 as isize));
+            }
+            let _ = ShowWindow(h, SW_SHOW);
+            let _ = SetWindowPos(h, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+            let _ = windows::Win32::Graphics::Gdi::UpdateWindow(h);
+        }
+    }
+}
+pub fn dismiss_stuck_input_hosts() {
+    unsafe {
+        let mut w = GetTopWindow(HWND::default()).unwrap_or_default();
+        while !w.0.is_null() {
+            if IsWindowVisible(w).as_bool() {
+                let mut buf = [0u16; 64];
+                let len = GetClassNameW(w, &mut buf);
+                let cls = String::from_utf16_lossy(&buf[..len as usize]);
+                let mut tbuf = [0u16; 64];
+                let tlen = GetWindowTextW(w, &mut tbuf);
+                let title = String::from_utf16_lossy(&tbuf[..tlen as usize]);
+                if cls == "Windows.UI.Core.CoreWindow" && title.contains("ввода") {
+                    let mut rect = windows::Win32::Foundation::RECT::default();
+                    let _ = GetWindowRect(w, &mut rect);
+                    let screen_w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+                    let screen_h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+                    if (rect.right - rect.left) >= screen_w && (rect.bottom - rect.top) >= screen_h {
+                        let _ = ShowWindow(w, SW_HIDE);
+                    }
+                }
+            }
+            w = GetWindow(w, GW_HWNDNEXT).unwrap_or_default();
+        }
     }
 }
 pub(crate) fn spawn_watchdog(handle: isize) -> Result<(), String> {
@@ -1959,26 +2008,66 @@ pub async fn dock_set_hidden(
         .map_err(|e| e.to_string())?;
     Ok(())
 }
-fn native_flyout_candidate(action: &str, class: &str, name: &str, languages: &[String]) -> bool {
+fn native_flyout_candidate(
+    action: &str,
+    class: &str,
+    name: &str,
+    auto_id: &str,
+    languages: &[String],
+) -> bool {
     let class = class.to_lowercase();
-    if action == "tray" {
-        return class.ends_with("chevroniconview");
-    }
-    if action != "language"
-        || !class.ends_with("iconview")
-        || class.contains("notify")
-        || class.contains("chevron")
-    {
-        return false;
-    }
     let name = name.to_lowercase();
-    languages.iter().any(|language| {
-        let language = language.to_lowercase();
-        !language.is_empty()
-            && (name == language
-                || name.starts_with(&format!("{language} "))
-                || name.starts_with(&format!("{language} (")))
-    })
+    let auto_id = auto_id.to_lowercase();
+    if action == "tray" {
+        return class.ends_with("chevroniconview")
+            || class.contains("chevron")
+            || auto_id.contains("chevron")
+            || auto_id.contains("overflow")
+            || auto_id == "systemtraychevronbutton"
+            || (auto_id == "systemtrayicon"
+                && (name.contains("знач")
+                    || name.contains("icon")
+                    || name.contains("піктограм")
+                    || name.contains("hidden")))
+            || name.contains("chevron")
+            || name.contains("hidden icon")
+            || name.contains("overflow")
+            || name.contains("приховані піктограми")
+            || name.contains("скрытые значки")
+            || name.contains("скрытых значков")
+            || name.contains("показать скрытые");
+    }
+    if action == "language" {
+        if class.contains("notify") || class.contains("chevron") {
+            return false;
+        }
+        if auto_id.contains("inputindicator")
+            || auto_id.contains("inputswitch")
+            || auto_id.contains("language")
+        {
+            return true;
+        }
+        if name.contains("індикатор вводу")
+            || name.contains("индикатор ввода")
+            || name.contains("input indicator")
+            || name.contains("input switch")
+            || name.contains("методы ввода")
+            || name.contains("методи вводу")
+        {
+            return true;
+        }
+        let language_match = languages.iter().any(|language| {
+            let language = language.to_lowercase();
+            !language.is_empty()
+                && (name == language
+                    || name.starts_with(&format!("{language} "))
+                    || name.starts_with(&format!("{language} (")))
+        });
+        if language_match {
+            return true;
+        }
+    }
+    false
 }
 
 fn open_native_flyout(action: &str, languages: &[String]) -> Result<(), String> {
@@ -1987,59 +2076,191 @@ fn open_native_flyout(action: &str, languages: &[String]) -> Result<(), String> 
         IUIAutomationInvokePattern, IUIAutomationTogglePattern, TreeScope_Descendants,
         UIA_ExpandCollapsePatternId, UIA_InvokePatternId, UIA_TogglePatternId,
     };
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_B,
+        VK_LWIN, VK_RETURN, VK_SPACE,
+    };
     let taskbar = primary_taskbar().ok_or("Windows taskbar is unavailable")?;
     let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
     let result = (|| unsafe {
+        let was_visible = IsWindowVisible(taskbar).as_bool();
+        let original_ex_style = GetWindowLongPtrW(taskbar, GWL_EXSTYLE);
+        if !was_visible {
+            SetWindowLongPtrW(taskbar, GWL_EXSTYLE, original_ex_style | WS_EX_LAYERED.0 as isize);
+            let _ = SetLayeredWindowAttributes(taskbar, COLORREF(0), 0, LWA_ALPHA);
+            let _ = ShowWindow(taskbar, SW_SHOWNA);
+            let _ = SetForegroundWindow(taskbar);
+        }
         let automation: IUIAutomation =
             CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
                 .map_err(|e| e.to_string())?;
-        let root = automation
-            .ElementFromHandle(taskbar)
-            .map_err(|e| e.to_string())?;
         let condition = automation
             .CreateTrueCondition()
             .map_err(|e| e.to_string())?;
-        let elements = root
-            .FindAll(TreeScope_Descendants, &condition)
-            .map_err(|e| e.to_string())?;
+
         let mut candidates = Vec::new();
-        for index in 0..elements.Length().map_err(|e| e.to_string())?.min(1500) {
-            let element = match elements.GetElement(index) {
-                Ok(element) => element,
-                Err(_) => continue,
-            };
-            let class = element
-                .CurrentClassName()
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-            let name = element
-                .CurrentName()
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-            if native_flyout_candidate(action, &class, &name, languages) {
-                candidates.push(element);
+        for _ in 0..15 {
+            if let Ok(root) = automation.ElementFromHandle(taskbar) {
+                if let Ok(elements) = root.FindAll(TreeScope_Descendants, &condition) {
+                    let len = elements.Length().unwrap_or(0).min(1500);
+                    for index in 0..len {
+                        if let Ok(element) = elements.GetElement(index) {
+                            let class = element
+                                .CurrentClassName()
+                                .map(|s| s.to_string())
+                                .unwrap_or_default();
+                            let name = element
+                                .CurrentName()
+                                .map(|s| s.to_string())
+                                .unwrap_or_default();
+                            let auto_id = element
+                                .CurrentAutomationId()
+                                .map(|s| s.to_string())
+                                .unwrap_or_default();
+                            if native_flyout_candidate(action, &class, &name, &auto_id, languages) {
+                                candidates.push(element);
+                            }
+                        }
+                    }
+                }
+            }
+            if !candidates.is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let mut invoked = false;
+        for element in &candidates {
+            if let Ok(pattern) =
+                element.GetCurrentPatternAs::<IUIAutomationInvokePattern>(UIA_InvokePatternId)
+            {
+                if pattern.Invoke().is_ok() {
+                    invoked = true;
+                    break;
+                }
+            }
+            if let Ok(pattern) =
+                element.GetCurrentPatternAs::<IUIAutomationTogglePattern>(UIA_TogglePatternId)
+            {
+                if pattern.Toggle().is_ok() {
+                    invoked = true;
+                    break;
+                }
+            }
+            if let Ok(pattern) = element
+                .GetCurrentPatternAs::<IUIAutomationExpandCollapsePattern>(UIA_ExpandCollapsePatternId)
+            {
+                if pattern.Expand().is_ok() {
+                    invoked = true;
+                    break;
+                }
             }
         }
-        if candidates.len() != 1 {
+        if !was_visible {
+            let action_str = action.to_string();
+            let taskbar_val = taskbar.0 as isize;
+            std::thread::spawn(move || {
+                let tb = HWND(taskbar_val as *mut _);
+                let flyout_classes: &[&str] = if action_str == "tray" {
+                    &["NotifyIconOverflowWindow"]
+                } else {
+                    &[
+                        "Xaml_WindowedPopupClass",
+                        "Shell_InputSwitchTopLevelWindow",
+                        "XamlExplorerHostIslandWindow_WASDK",
+                    ]
+                };
+                let mut found_flyout = HWND::default();
+                for _ in 0..40 {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    for &cls in flyout_classes {
+                        let wide: Vec<u16> = cls.encode_utf16().chain(Some(0)).collect();
+                        if let Ok(w) = FindWindowW(PCWSTR(wide.as_ptr()), None) {
+                            if !w.0.is_null() && IsWindowVisible(w).as_bool() {
+                                let mut rect = windows::Win32::Foundation::RECT::default();
+                                let _ = GetWindowRect(w, &mut rect);
+                                if rect.right > rect.left && rect.bottom > rect.top {
+                                    found_flyout = w;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if !found_flyout.0.is_null() {
+                        break;
+                    }
+                }
+                if !found_flyout.0.is_null() {
+                    while IsWindowVisible(found_flyout).as_bool() {
+                        std::thread::sleep(std::time::Duration::from_millis(80));
+                    }
+                }
+                let _ = ShowWindow(tb, SW_HIDE);
+                SetWindowLongPtrW(tb, GWL_EXSTYLE, original_ex_style);
+                dismiss_stuck_input_hosts();
+            });
+        }
+        if invoked {
+            return Ok(());
+        }
+        if action == "tray" {
+            let key = |vk: VIRTUAL_KEY, up: bool| INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: vk,
+                        dwFlags: if up {
+                            KEYEVENTF_KEYUP
+                        } else {
+                            Default::default()
+                        },
+                        ..Default::default()
+                    },
+                },
+            };
+            let inputs = vec![
+                key(VK_LWIN, false),
+                key(VK_B, false),
+                key(VK_B, true),
+                key(VK_LWIN, true),
+            ];
+            if SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) == inputs.len() as u32 {
+                std::thread::sleep(std::time::Duration::from_millis(40));
+                let enter = vec![key(VK_RETURN, false), key(VK_RETURN, true)];
+                if SendInput(&enter, std::mem::size_of::<INPUT>() as i32) == enter.len() as u32 {
+                    return Ok(());
+                }
+            }
+        }
+        if action == "language" {
+            let key = |vk: VIRTUAL_KEY, up: bool| INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: vk,
+                        dwFlags: if up {
+                            KEYEVENTF_KEYUP
+                        } else {
+                            Default::default()
+                        },
+                        ..Default::default()
+                    },
+                },
+            };
+            let inputs = vec![
+                key(VK_LWIN, false),
+                key(VK_SPACE, false),
+                key(VK_SPACE, true),
+                key(VK_LWIN, true),
+            ];
+            if SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) == inputs.len() as u32 {
+                return Ok(());
+            }
+        }
+        if candidates.is_empty() {
             return Err(format!(
                 "Windows did not expose a unique {action} control while the taskbar is hidden"
             ));
-        }
-        let element = &candidates[0];
-        if let Ok(pattern) =
-            element.GetCurrentPatternAs::<IUIAutomationTogglePattern>(UIA_TogglePatternId)
-        {
-            return pattern.Toggle().map_err(|e| e.to_string());
-        }
-        if let Ok(pattern) =
-            element.GetCurrentPatternAs::<IUIAutomationInvokePattern>(UIA_InvokePatternId)
-        {
-            return pattern.Invoke().map_err(|e| e.to_string());
-        }
-        if let Ok(pattern) = element
-            .GetCurrentPatternAs::<IUIAutomationExpandCollapsePattern>(UIA_ExpandCollapsePatternId)
-        {
-            return pattern.Expand().map_err(|e| e.to_string());
         }
         Err(format!(
             "Windows does not allow the hidden {action} control to be opened"
@@ -2055,37 +2276,6 @@ fn open_native_flyout(action: &str, languages: &[String]) -> Result<(), String> 
 pub async fn dock_open_system(window: tauri::Window, action: String) -> Result<(), String> {
     if window.label() != "desktop-dock" {
         return Err("Only the dock can open system menus".into());
-    }
-    if action == "tray" || action == "language" {
-        let languages = if action == "language" {
-            use windows::Win32::Globalization::{
-                GetLocaleInfoW, LOCALE_SENGLANGUAGE, LOCALE_SLANGUAGE,
-            };
-            let mut names = Vec::new();
-            for item in dock_languages(window.clone())? {
-                if let Ok(layout) = usize::from_str_radix(&item.id, 16) {
-                    for kind in [LOCALE_SENGLANGUAGE, LOCALE_SLANGUAGE] {
-                        let mut buffer = [0u16; 128];
-                        let n = unsafe {
-                            GetLocaleInfoW((layout & 0xffff) as u32, kind, Some(&mut buffer))
-                        };
-                        if n > 1 {
-                            names.push(String::from_utf16_lossy(&buffer[..n as usize - 1]));
-                        }
-                    }
-                }
-                names.push(item.name);
-            }
-            names.push(dock_input_language(window)?);
-            names
-        } else {
-            Vec::new()
-        };
-        return tauri::async_runtime::spawn_blocking(move || {
-            open_native_flyout(&action, &languages)
-        })
-        .await
-        .map_err(|e| e.to_string())?;
     }
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_A,
@@ -2113,6 +2303,13 @@ pub async fn dock_open_system(window: tauri::Window, action: String) -> Result<(
             key(VK_LWIN, true),
         ]
     };
+    if action == "tray" || action == "language" {
+        let languages = dock_languages(window.clone())
+            .map(|list| list.into_iter().map(|l| l.name).collect::<Vec<_>>())
+            .unwrap_or_default();
+        return tauri::async_runtime::spawn_blocking(move || open_native_flyout(&action, &languages))
+            .await.map_err(|e| e.to_string())?;
+    }
     let inputs = match action.as_str() {
         "start" => vec![key(VK_LWIN, false), key(VK_LWIN, true)],
         "search" => shortcut(VK_S),
@@ -2186,8 +2383,124 @@ pub struct DockLanguage {
 }
 
 #[tauri::command]
+pub async fn dock_open_language(window: tauri::Window, x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
+    if window.label() != "desktop-dock" || ![x, y, width, height].iter().all(|n| n.is_finite()) {
+        return Err("Invalid language menu request".into());
+    }
+    let _ = dock_input_language(window.clone())?;
+    let count = dock_languages(window.clone())?.len();
+    if count == 0 { return Err("Windows did not report any keyboard layouts".into()); }
+    let app = window.app_handle();
+    let popup = match app.get_webview_window("dock-language") {
+        Some(popup) => popup,
+        None => tauri::WebviewWindowBuilder::new(app, "dock-language", tauri::WebviewUrl::App("dock-language.html".into()))
+            .title("Input language").decorations(false).transparent(true).shadow(false)
+            .skip_taskbar(true).always_on_top(true).resizable(false).visible(false)
+            .inner_size(220., 180.).build().map_err(|e| e.to_string())?,
+    };
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let origin = window.outer_position().map_err(|e| e.to_string())?;
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?.ok_or("No monitor available")?;
+    let position = window.state::<DockState>().config.lock().map_err(|e| e.to_string())?.position.clone();
+    let pw = (220.0 * scale).round() as i32;
+    let ph = ((count.min(8) as f64 * 42.0 + 20.0) * scale).round() as i32;
+    let ax = origin.x + (x * scale).round() as i32;
+    let ay = origin.y + (y * scale).round() as i32;
+    let aw = (width * scale).round() as i32;
+    let ah = (height * scale).round() as i32;
+    let gap = (8.0 * scale).round() as i32;
+    let (mut px, mut py) = match position.as_str() {
+        "top" => (ax + aw / 2 - pw / 2, ay + ah + gap),
+        "left" => (ax + aw + gap, ay + ah / 2 - ph / 2),
+        "right" => (ax - pw - gap, ay + ah / 2 - ph / 2),
+        _ => (ax + aw / 2 - pw / 2, ay - ph - gap),
+    };
+    let mp = monitor.position(); let ms = monitor.size();
+    px = px.clamp(mp.x, (mp.x + ms.width as i32 - pw).max(mp.x));
+    py = py.clamp(mp.y, (mp.y + ms.height as i32 - ph).max(mp.y));
+    popup.set_size(tauri::PhysicalSize::new(pw as u32, ph as u32)).map_err(|e| e.to_string())?;
+    popup.set_position(tauri::PhysicalPosition::new(px, py)).map_err(|e| e.to_string())?;
+    popup.show().map_err(|e| e.to_string())?;
+    popup.set_focus().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn dock_select_language(window: tauri::Window, id: String) -> Result<(), String> {
+    if window.label() != "dock-language" { return Err("Only the language menu can select a layout".into()); }
+    let languages = dock_languages(window.clone())?;
+    if !languages.iter().any(|language| language.id == id) { return Err("Unknown keyboard layout".into()); }
+    let layout = usize::from_str_radix(&id, 16).map_err(|e| e.to_string())?;
+    let target = *window.state::<DockState>().language_target.lock().map_err(|e| e.to_string())?;
+    let (handle, expected_pid) = target.ok_or("Select an application before changing its input language")?;
+    let target = hwnd(handle);
+    let mut pid = 0;
+    unsafe {
+        GetWindowThreadProcessId(target, Some(&mut pid));
+        if pid != expected_pid || !IsWindow(target).as_bool() { return Err("The target application is no longer available".into()); }
+        let root = GetAncestor(target, GA_ROOT);
+        if !root.0.is_null() { let _ = SetForegroundWindow(root); }
+        PostMessageW(target, WM_INPUTLANGCHANGEREQUEST, WPARAM(0), LPARAM(layout as isize)).map_err(|e| e.to_string())?;
+    }
+    window.hide().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[allow(dead_code)]
+fn show_language_menu(languages: Vec<DockLanguage>, target: Option<(isize, u32)>) -> Result<(), String> {
+    use windows::Win32::Foundation::{POINT, WPARAM};
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    let target = target.ok_or("Select an application before changing its input language")?;
+    if languages.is_empty() {
+        return Err("Windows did not report any keyboard layouts".into());
+    }
+    unsafe {
+        let mut point = POINT::default();
+        GetCursorPos(&mut point).map_err(|e| e.to_string())?;
+        let menu = CreatePopupMenu().map_err(|e| e.to_string())?;
+        for (index, language) in languages.iter().enumerate() {
+            let label: Vec<u16> = language.name.encode_utf16().chain(Some(0)).collect();
+            if let Err(error) = AppendMenuW(menu, MF_STRING, index + 1, PCWSTR(label.as_ptr())) {
+                let _ = DestroyMenu(menu);
+                return Err(error.to_string());
+            }
+        }
+        let instance = GetModuleHandleW(None).map_err(|e| e.to_string())?;
+        let owner = match CreateWindowExW(
+            WS_EX_TOOLWINDOW, w!("STATIC"), w!(""), WS_POPUP | WS_VISIBLE,
+            -32000, -32000, 1, 1, None, None, instance, None,
+        ) {
+            Ok(owner) => owner,
+            Err(error) => { let _ = DestroyMenu(menu); return Err(error.to_string()); }
+        };
+        let _ = SetForegroundWindow(owner);
+        let selected = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_BOTTOMALIGN,
+            point.x, point.y, 0, owner, None).0 as usize;
+        let _ = DestroyMenu(menu);
+        let _ = DestroyWindow(owner);
+        let target_window = hwnd(target.0);
+        let root = GetAncestor(target_window, GA_ROOT);
+        if !root.0.is_null() {
+            let _ = SetForegroundWindow(root);
+        }
+        if selected == 0 { return Ok(()); }
+        let language = languages.get(selected - 1).ok_or("Invalid keyboard layout")?;
+        let layout = usize::from_str_radix(&language.id, 16)
+            .map_err(|e| e.to_string())?;
+        let mut pid = 0;
+        GetWindowThreadProcessId(target_window, Some(&mut pid));
+        if pid != target.1 || !IsWindow(target_window).as_bool() {
+            return Err("The target application is no longer available".into());
+        }
+        PostMessageW(target_window, WM_INPUTLANGCHANGEREQUEST, WPARAM(0), LPARAM(layout as isize))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn dock_languages(window: tauri::Window) -> Result<Vec<DockLanguage>, String> {
-    if window.label() != "desktop-dock" {
+    if window.label() != "desktop-dock" && window.label() != "dock-language" {
         return Err("Only the dock can list input languages".into());
     }
     use windows::Win32::Globalization::{GetLocaleInfoW, LOCALE_SNATIVELANGNAME};
@@ -2393,11 +2706,20 @@ mod tests {
             "tray",
             "SystemTray.ChevronIconView",
             "",
+            "",
+            &languages
+        ));
+        assert!(native_flyout_candidate(
+            "tray",
+            "Button",
+            "",
+            "SystemTrayChevronButton",
             &languages
         ));
         assert!(!native_flyout_candidate(
             "tray",
             "SystemTray.NotifyIconView",
+            "",
             "",
             &languages
         ));
@@ -2405,18 +2727,28 @@ mod tests {
             "language",
             "SystemTray.IconView",
             "Українська (Україна)",
+            "",
+            &languages
+        ));
+        assert!(native_flyout_candidate(
+            "language",
+            "Button",
+            "",
+            "SystemTrayInputIndicatorButton",
             &languages
         ));
         assert!(!native_flyout_candidate(
             "language",
             "SystemTray.NotifyIconView",
             "English",
+            "",
             &languages
         ));
         assert!(!native_flyout_candidate(
             "language",
             "SystemTray.IconView",
             "Englishman",
+            "",
             &languages
         ));
     }

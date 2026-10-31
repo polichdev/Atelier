@@ -849,6 +849,8 @@ pub fn run() {
             desktop_dock::dock_open_system,
             desktop_dock::dock_input_language,
             desktop_dock::dock_languages,
+            desktop_dock::dock_open_language,
+            desktop_dock::dock_select_language,
             desktop_dock::dock_reorder,
             desktop_dock::dock_set_icon,
             desktop_dock::dock_open_studio,
@@ -857,6 +859,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(false) = event {
                 desktop_widgets::dismiss_resize(window);
+                if window.label() == "dock-language" { let _ = window.hide(); }
             }
             if let tauri::WindowEvent::Moved(position) = event {
                 desktop_widgets::moved(window, position);
@@ -875,5 +878,6 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!());
+    desktop_dock::restore_all_taskbars();
     if let Err(error) = desktop_background::shutdown() { tracing::error!(%error, "Could not restore Windows background after exit"); }
 }

@@ -32,9 +32,9 @@ function render(){
       const fallback=document.createElement('span');fallback.className='fallback';
       const icon=document.createElement('span');icon.className='icon';icon.append(image,fallback);
       const indicator=document.createElement('span');indicator.className='indicator';button.append(icon,indicator);
-      button.addEventListener('click',()=>activate(button.dataset.id,false));
+      button.addEventListener('click',()=>{button.blur();$('label').hidden=true;activate(button.dataset.id,false)});
       button.addEventListener('pointerenter',()=>showLabel(button));button.addEventListener('pointerleave',()=>$('label').hidden=true);
-      button.addEventListener('focus',()=>showLabel(button));button.addEventListener('blur',()=>$('label').hidden=true);
+      button.addEventListener('focus',()=>{if(button.matches(':focus-visible'))showLabel(button)});button.addEventListener('blur',()=>$('label').hidden=true);
       button.addEventListener('contextmenu',e=>{e.preventDefault();openMenu(button.dataset.id)});
       button.addEventListener('dragstart',e=>{if(!button.draggable){e.preventDefault();return}dragId=button.dataset.id;button.classList.add('dragging');e.dataTransfer.setData('text/plain',dragId)});
       button.addEventListener('dragend',()=>{dragId=null;button.classList.remove('dragging');document.querySelectorAll('.drop-target').forEach(e=>e.classList.remove('drop-target'))});
@@ -57,7 +57,7 @@ async function activate(id,newInstance){
 
 }
 function showLabel(button){
-  if(!cfg?.show_labels||menuItem)return;const item=items.find(i=>i.id===button.dataset.id);if(!item)return;
+  if(!cfg?.show_labels||menuItem||(!button.matches(':hover')&&!button.matches(':focus-visible')))return;const item=items.find(i=>i.id===button.dataset.id);if(!item)return;
   const label=$('label');label.textContent=item.name+(item.windows>1?' · '+item.windows+' windows':'');label.hidden=false;
   const r=button.getBoundingClientRect(),l=label.getBoundingClientRect();
   let x=r.x+(r.width-l.width)/2,y=r.y-l.height-8;
@@ -93,9 +93,11 @@ async function setCollapsed(value){
   try{await invoke('dock_resize',{...visibleSize,collapsed:value})}catch(e){error(e)}
 }
 document.documentElement.addEventListener('pointerenter',()=>{clearTimeout(hideTimer);setCollapsed(false)});
-document.documentElement.addEventListener('pointerleave',()=>{closeMenu();clearTimeout(hideTimer);if(cfg?.auto_hide)hideTimer=setTimeout(()=>setCollapsed(true),cfg.hide_delay)});
+document.documentElement.addEventListener('pointerleave',()=>{closeMenu();$('label').hidden=true;clearTimeout(hideTimer);if(cfg?.auto_hide)hideTimer=setTimeout(()=>setCollapsed(true),cfg.hide_delay)});
+window.addEventListener('blur',()=>{closeMenu();$('label').hidden=true});
 $('apps').addEventListener('wheel',event=>{if(cfg&&!['left','right'].includes(cfg.position)&&$('apps').scrollWidth>$('apps').clientWidth){$('apps').scrollLeft+=event.deltaY||event.deltaX;event.preventDefault()}},{passive:false});
 for(const action of ['start','search','tray','language','network','volume','clock'])$(action).addEventListener('click',()=>invoke('dock_open_system',{action}).catch(error));
+
 $('studio').addEventListener('click',()=>invoke('dock_open_studio').catch(error));
 setInterval(()=>{$('clock').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})},1000);
 async function refreshLanguage(){if(!invoke||!cfg?.show_language)return;try{$('language').textContent=await invoke('dock_input_language')}catch{}}

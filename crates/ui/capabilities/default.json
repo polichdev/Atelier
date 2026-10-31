@@ -5,6 +5,7 @@
   "windows": [
     "main",
     "desktop-dock",
+    "dock-language",
     "widget-*",
     "desktop-wallpaper"
   ],
@@ -13,6 +14,7 @@
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
+    "core:window:allow-hide",
     "core:window:allow-start-dragging",
     "core:window:allow-is-maximized"
   ]
